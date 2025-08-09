@@ -21,10 +21,18 @@ export function getBinaryPath(_context: ExtensionContext, binaryName: string): s
 
     // On Windows, use .exe suffix
     const executableName = platform === 'win32' ? `${binaryName}.exe` : binaryName;
-
+    
     // Define potential base paths for the Goose Desktop installation
     const basePaths: string[] = [];
-
+    
+    // check for a user-defined binary path and push to the top of the directory list if found
+    const userBinaryPath = vscode.workspace.getConfiguration('goose.server').get<string>('path');
+    if (userBinaryPath && userBinaryPath.trim().length > 0) {
+        const normalizedPath = path.normalize(userBinaryPath);
+        logger.info(`User-defined binary path found: ${normalizedPath}`);
+        basePaths.push(normalizedPath);
+    }
+    
     if (platform === 'darwin') { // macOS
         // Check multiple potential paths for macOS - Electron apps can have different structures
         const macAppPaths = [
