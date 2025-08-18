@@ -67,6 +67,7 @@ export function getBinaryPath(_context: ExtensionContext, binaryName: string): s
             '/opt/Goose/resources/app/bin', // Common install location
             '/opt/Goose/resources/bin',
             '/opt/Goose/resources/app.asar.unpacked/bin',
+            '/usr/lib/goose/resources/bin', // .deb install location
             '/usr/local/Goose/resources/app/bin',
             '/usr/local/Goose/resources/bin',
             '/usr/local/bin', // Global bin where the goosed might be symlinked
