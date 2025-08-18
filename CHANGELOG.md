@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.22](https://github.com/block/vscode-goose/compare/v0.1.21...v0.1.22) (2025-08-18)
+
+
+### Bug Fixes
+
+* add debian binary path ([#21](https://github.com/block/vscode-goose/issues/21)) ([15fde5a](https://github.com/block/vscode-goose/commit/15fde5ad5a4bc3c3dc3afcf0d55d05a7c53d20e2))
+
 ## [0.1.21](https://github.com/block/vscode-goose/compare/v0.1.20...v0.1.21) (2025-07-23)
 
 
