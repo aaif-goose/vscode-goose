@@ -303,22 +303,24 @@ export class ServerManager {
                 return; // Prevent agent creation if config is missing
             }
 
-            // Step 1: Get available agent versions
-            this.logger.info("Fetching agent versions...");
-            const versionsInfo = await this.apiClient.getAgentVersions();
-            const agentVersion = versionsInfo.default_version; // Use the default version
+            // Step 1: Get available agent versions (REMOVED as endpoint is deprecated)
+            this.logger.info("Step 1: Skipping agent version fetch (endpoint removed).");
+            const agentVersion = undefined; // Let the server use its default version.
 
             // Step 2: Add the 'developer' extension (Trying this before createAgent)
-            this.logger.info("Adding 'developer' extension to agent...");
+            this.logger.info("Step 2: Adding 'developer' extension to agent...");
             await this.apiClient.addExtension('developer');
+            this.logger.info("Step 2 successful.");
 
             // Step 3: Create the agent using the fetched version
-            this.logger.info(`Configuring agent with provider: ${this.gooseProvider}, model: ${this.gooseModel || 'default'}, version: ${agentVersion}`);
+            this.logger.info(`Step 3: Configuring agent with provider: ${this.gooseProvider}, model: ${this.gooseModel || 'default'}, version: ${agentVersion}`);
             await this.apiClient.createAgent(this.gooseProvider, this.gooseModel, agentVersion);
+            this.logger.info("Step 3 successful.");
 
             // Step 4: Set the initial system prompt
-            this.logger.info("Setting initial agent system prompt...");
+            this.logger.info("Step 4: Setting initial agent system prompt...");
             await this.apiClient.setAgentPrompt(vscodePrompt); // Use the defined prompt
+            this.logger.info("Step 4 successful.");
 
             this.logger.info("Agent configuration complete.");
 
