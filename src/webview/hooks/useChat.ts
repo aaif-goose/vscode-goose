@@ -216,7 +216,7 @@ export function useChat(): UseChatReturn {
     dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
     dispatch({ type: 'START_GENERATION', payload: { responseId } });
 
-    postMessage(createSendMessageMessage(content, userMessageId));
+    postMessage(createSendMessageMessage(content, userMessageId, responseId));
   }, []);
 
   const stopGeneration = useCallback(() => {

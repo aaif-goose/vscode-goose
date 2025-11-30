@@ -1,6 +1,7 @@
 import { MessageStatus } from '../../../shared/types';
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
 import { CopyButton } from '../markdown/CopyButton';
+import { ProgressIndicator } from './ProgressIndicator';
 
 interface AssistantMessageProps {
   content: string;
@@ -19,11 +20,17 @@ export function AssistantMessage({
   status,
   isStreaming,
 }: AssistantMessageProps) {
+  const showIndicator = isStreaming && !content;
+
   return (
     <div className="flex flex-col items-start group">
       <div className="w-full">
         <div className="relative">
-          <MarkdownRenderer content={content} isStreaming={isStreaming} />
+          {showIndicator ? (
+            <ProgressIndicator className="py-2" />
+          ) : (
+            <MarkdownRenderer content={content} isStreaming={isStreaming} />
+          )}
           {!isStreaming && content && (
             <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
               <CopyButton text={content} />

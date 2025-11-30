@@ -1,6 +1,7 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { ChatMessage, MessageStatus } from '../../../shared/types';
 import { MessageItem } from './MessageItem';
+import { useAutoScroll } from '../../hooks/useAutoScroll';
 
 interface MessageListProps {
   messages: readonly ChatMessage[];
@@ -16,6 +17,17 @@ export function MessageList({
   onMessageFocus,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollToBottom } = useAutoScroll(containerRef, {
+    isStreaming: isGenerating,
+  });
+  const prevMessageCountRef = useRef(messages.length);
+
+  useEffect(() => {
+    if (messages.length > prevMessageCountRef.current) {
+      scrollToBottom();
+    }
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length, scrollToBottom]);
 
   if (messages.length === 0) {
     return (

@@ -62,6 +62,7 @@ export interface ErrorPayload {
 export interface SendMessagePayload {
   readonly content: string;
   readonly messageId: string;
+  readonly responseId: string;
 }
 
 /** Payload for STREAM_TOKEN message */
@@ -172,11 +173,12 @@ export function createErrorMessage(
 /** Create a SEND_MESSAGE message */
 export function createSendMessageMessage(
   content: string,
-  messageId: string
+  messageId: string,
+  responseId: string
 ): WebviewMessage<WebviewMessageType.SEND_MESSAGE> {
   return {
     type: WebviewMessageType.SEND_MESSAGE,
-    payload: { content, messageId },
+    payload: { content, messageId, responseId },
   };
 }
 

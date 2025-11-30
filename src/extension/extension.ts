@@ -19,10 +19,91 @@ import { createSubprocessManager, SubprocessManager } from './subprocessManager'
 import { createWebviewProvider, WebviewProvider } from './webviewProvider';
 import { registerCommands } from './commands';
 import { ProcessStatus } from '../shared/types';
+import {
+  isSendMessageMessage,
+  isStopGenerationMessage,
+  createStreamTokenMessage,
+  createGenerationCompleteMessage,
+  createGenerationCancelledMessage,
+} from '../shared/messages';
 
 let logger: Logger | null = null;
 let subprocessManager: SubprocessManager | null = null;
 let webviewProvider: WebviewProvider | null = null;
+
+// Mock streaming state
+let mockStreamingTimer: ReturnType<typeof setTimeout> | null = null;
+let mockStreamingCancelled = false;
+
+const MOCK_RESPONSES = [
+  "I'd be happy to help you with that! Let me think about this...\n\nHere's what I suggest:\n\n1. **First step**: Start by understanding the problem\n2. **Second step**: Break it down into smaller parts\n3. **Third step**: Implement the solution\n\n```typescript\nfunction example() {\n  console.log('Hello, world!');\n}\n```\n\nLet me know if you need more details!",
+  "Great question! Here's a quick overview:\n\n- This is a **key concept** to understand\n- It works by processing data incrementally\n- The result is then returned to the caller\n\n> Note: This is just a mock response for testing the UI.\n\nWould you like me to elaborate on any part?",
+  "Sure thing! Let me explain...\n\nThe main idea here is to keep things simple and focused. Here's an example:\n\n```python\ndef greet(name):\n    return f'Hello, {name}!'\n```\n\nThis demonstrates the basic pattern. The streaming UI should show this text appearing gradually, token by token.",
+];
+
+function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
+  let currentResponseId: string | null = null;
+
+  provider.onMessage(message => {
+    if (isSendMessageMessage(message)) {
+      const { content, responseId } = message.payload;
+      log.info(`[Mock] Received message: ${content.substring(0, 50)}...`);
+
+      // Use the responseId provided by the webview
+      currentResponseId = responseId;
+      mockStreamingCancelled = false;
+
+      // Pick a random mock response
+      const responseText = MOCK_RESPONSES[Math.floor(Math.random() * MOCK_RESPONSES.length)];
+      const tokens = responseText.split(/(?<=\s)|(?=\s)/); // Split on whitespace boundaries
+
+      let tokenIndex = 0;
+
+      const streamNextToken = (): void => {
+        if (mockStreamingCancelled || tokenIndex >= tokens.length) {
+          if (!mockStreamingCancelled && currentResponseId) {
+            provider.postMessage(createGenerationCompleteMessage(currentResponseId));
+            log.info('[Mock] Generation complete');
+          }
+          mockStreamingTimer = null;
+          currentResponseId = null;
+          return;
+        }
+
+        if (currentResponseId) {
+          provider.postMessage(
+            createStreamTokenMessage(currentResponseId, tokens[tokenIndex], false)
+          );
+        }
+        tokenIndex++;
+
+        // Random delay between 20-80ms for realistic streaming feel
+        const delay = 20 + Math.random() * 60;
+        mockStreamingTimer = setTimeout(streamNextToken, delay);
+      };
+
+      // Start streaming after a small initial delay
+      mockStreamingTimer = setTimeout(streamNextToken, 100);
+    }
+
+    if (isStopGenerationMessage(message)) {
+      log.info('[Mock] Stop generation requested');
+      mockStreamingCancelled = true;
+
+      if (mockStreamingTimer) {
+        clearTimeout(mockStreamingTimer);
+        mockStreamingTimer = null;
+      }
+
+      if (currentResponseId) {
+        provider.postMessage(createGenerationCancelledMessage(currentResponseId));
+        currentResponseId = null;
+      }
+    }
+  });
+
+  log.info('[Mock] Mock streaming handler registered');
+}
 
 function getWorkspaceFolder(): string {
   const folders = vscode.workspace.workspaceFolders;
@@ -129,6 +210,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.info('Subprocess started successfully');
     webviewProvider.updateStatus(ProcessStatus.RUNNING);
   }
+
+  // TODO: Wire up real ACP message forwarding when protocol is defined
+  // For now, use mock streaming for UI testing
+  setupMockStreaming(webviewProvider, logger.child('Mock'));
+  logger.info('[Mock] Mock streaming enabled for UI testing');
 
   registerConfigChangeHandler(context);
 

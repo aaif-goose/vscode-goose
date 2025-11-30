@@ -6,3 +6,4 @@ export { AssistantMessage } from './AssistantMessage';
 export { InputArea } from './InputArea';
 export { SendButton } from './SendButton';
 export { StopButton } from './StopButton';
+export { ProgressIndicator } from './ProgressIndicator';
