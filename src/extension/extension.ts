@@ -18,14 +18,16 @@ import {
 import { createSubprocessManager, SubprocessManager } from './subprocessManager';
 import { createWebviewProvider, WebviewProvider } from './webviewProvider';
 import { registerCommands } from './commands';
-import { ProcessStatus } from '../shared/types';
+import { ProcessStatus, JsonRpcNotification } from '../shared/types';
 import {
   isSendMessageMessage,
   isStopGenerationMessage,
   createStreamTokenMessage,
   createGenerationCompleteMessage,
   createGenerationCancelledMessage,
+  createErrorMessage,
 } from '../shared/messages';
+import { JsonRpcClient } from './jsonRpcClient';
 
 let logger: Logger | null = null;
 let subprocessManager: SubprocessManager | null = null;
@@ -103,6 +105,125 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
   });
 
   log.info('[Mock] Mock streaming handler registered');
+}
+
+interface AcpSessionUpdateParams {
+  readonly sessionId: string;
+  readonly update: {
+    readonly sessionUpdate: string;
+    readonly content?: {
+      readonly type: string;
+      readonly text?: string;
+    };
+  };
+}
+
+interface AcpPromptResponse {
+  readonly stopReason: 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
+}
+
+interface AcpSessionNewResponse {
+  readonly sessionId: string;
+}
+
+async function initializeAcpSession(
+  client: JsonRpcClient,
+  workingDirectory: string,
+  log: Logger
+): Promise<string | null> {
+  log.info('Initializing ACP session...');
+
+  const result = await client.request<AcpSessionNewResponse>('session/new', {
+    cwd: workingDirectory,
+    mcpServers: [],
+  })();
+
+  if (E.isLeft(result)) {
+    log.error('Failed to create ACP session:', result.left);
+    return null;
+  }
+
+  log.info(`ACP session created: ${result.right.sessionId}`);
+  return result.right.sessionId;
+}
+
+function setupAcpCommunication(
+  provider: WebviewProvider,
+  client: JsonRpcClient,
+  sessionId: string,
+  log: Logger
+): void {
+  let currentResponseId: string | null = null;
+
+  client.onNotification((notification: JsonRpcNotification) => {
+    const method = notification.method;
+    const params = notification.params as AcpSessionUpdateParams | undefined;
+
+    if (method === 'session/update' && params?.update) {
+      const { sessionUpdate, content } = params.update;
+
+      if (sessionUpdate === 'agent_message_chunk' && content?.text && currentResponseId) {
+        provider.postMessage(createStreamTokenMessage(currentResponseId, content.text, false));
+      }
+    }
+  });
+
+  provider.onMessage(message => {
+    if (isSendMessageMessage(message)) {
+      const { content, responseId } = message.payload;
+      currentResponseId = responseId;
+      log.info(`Sending message to ACP: ${content.substring(0, 50)}...`);
+
+      const sendRequest = async (): Promise<void> => {
+        const result = await client.request<AcpPromptResponse>('session/prompt', {
+          sessionId,
+          prompt: [
+            {
+              type: 'text',
+              text: content,
+            },
+          ],
+        })();
+
+        if (E.isLeft(result)) {
+          log.error('ACP request failed:', result.left);
+          provider.postMessage(
+            createErrorMessage(
+              'Message Send Failed',
+              `Failed to send message: ${result.left.message}`,
+              { label: 'View Logs', command: 'goose.showLogs' }
+            )
+          );
+          if (currentResponseId) {
+            provider.postMessage(createGenerationCancelledMessage(currentResponseId));
+            currentResponseId = null;
+          }
+        } else {
+          log.info(`Generation completed with stopReason: ${result.right.stopReason}`);
+          if (currentResponseId) {
+            if (result.right.stopReason === 'cancelled') {
+              provider.postMessage(createGenerationCancelledMessage(currentResponseId));
+            } else {
+              provider.postMessage(createGenerationCompleteMessage(currentResponseId));
+            }
+            currentResponseId = null;
+          }
+        }
+      };
+
+      sendRequest();
+    }
+
+    if (isStopGenerationMessage(message)) {
+      log.info('Sending cancel request to ACP');
+      const cancelResult = client.notify('session/cancel', { sessionId });
+      if (E.isLeft(cancelResult)) {
+        log.error('Failed to send cancel notification:', cancelResult.left);
+      }
+    }
+  });
+
+  log.info('ACP communication handler registered');
 }
 
 function getWorkspaceFolder(): string {
@@ -206,15 +327,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (isSubprocessSpawnError(error)) {
       showSubprocessError(error);
     }
+
+    setupMockStreaming(webviewProvider, logger.child('Mock'));
+    logger.info('[Mock] Mock streaming enabled (subprocess failed to start)');
   } else {
     logger.info('Subprocess started successfully');
     webviewProvider.updateStatus(ProcessStatus.RUNNING);
-  }
 
-  // TODO: Wire up real ACP message forwarding when protocol is defined
-  // For now, use mock streaming for UI testing
-  setupMockStreaming(webviewProvider, logger.child('Mock'));
-  logger.info('[Mock] Mock streaming enabled for UI testing');
+    const clientResult = subprocessManager.getClient();
+    if (E.isRight(clientResult)) {
+      const client = clientResult.right;
+      const sessionId = await initializeAcpSession(
+        client,
+        getWorkspaceFolder(),
+        logger.child('ACP')
+      );
+
+      if (sessionId) {
+        setupAcpCommunication(webviewProvider, client, sessionId, logger.child('ACP'));
+        logger.info('ACP communication enabled');
+      } else {
+        setupMockStreaming(webviewProvider, logger.child('Mock'));
+        logger.info('[Mock] Mock streaming enabled (session initialization failed)');
+      }
+    } else {
+      setupMockStreaming(webviewProvider, logger.child('Mock'));
+      logger.info('[Mock] Mock streaming enabled (no client available)');
+    }
+  }
 
   registerConfigChangeHandler(context);
 
