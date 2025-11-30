@@ -1,11 +1,25 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-body {
-  font-family: var(--vscode-font-family);
-  color: var(--vscode-foreground);
-  background-color: var(--vscode-editor-background);
-  margin: 0;
-  padding: 0;
+@theme {
+  --color-editor: var(--vscode-editor-background);
+  --color-editor-fg: var(--vscode-editor-foreground);
+  --color-button: var(--vscode-button-background);
+  --color-button-fg: var(--vscode-button-foreground);
+  --color-button-hover: var(--vscode-button-hoverBackground);
+  --color-input: var(--vscode-input-background);
+  --color-input-fg: var(--vscode-input-foreground);
+  --color-input-border: var(--vscode-input-border);
+  --color-focus: var(--vscode-focusBorder);
+  --color-link: var(--vscode-textLink-foreground);
+  --color-link-hover: var(--vscode-textLink-activeForeground);
+}
+
+@layer base {
+  body {
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    margin: 0;
+    padding: 0;
+  }
 }

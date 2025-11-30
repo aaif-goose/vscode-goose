@@ -2,7 +2,7 @@
  * Message types for webview-extension communication via postMessage.
  */
 
-import { ProcessStatus } from './types';
+import { ChatMessage, ProcessStatus } from './types';
 
 /** Types of messages that can be sent between webview and extension */
 export enum WebviewMessageType {
@@ -14,6 +14,18 @@ export enum WebviewMessageType {
   GET_STATUS = 'GET_STATUS',
   /** Extension sends error to webview for display */
   ERROR = 'ERROR',
+  /** Webview sends a chat message to extension */
+  SEND_MESSAGE = 'SEND_MESSAGE',
+  /** Extension streams a response token to webview */
+  STREAM_TOKEN = 'STREAM_TOKEN',
+  /** Extension signals generation is complete */
+  GENERATION_COMPLETE = 'GENERATION_COMPLETE',
+  /** Webview requests to stop generation */
+  STOP_GENERATION = 'STOP_GENERATION',
+  /** Extension signals generation was cancelled */
+  GENERATION_CANCELLED = 'GENERATION_CANCELLED',
+  /** Extension sends chat history to webview */
+  CHAT_HISTORY = 'CHAT_HISTORY',
 }
 
 // ============================================================================
@@ -44,6 +56,37 @@ export interface ErrorPayload {
   };
 }
 
+/** Payload for SEND_MESSAGE message */
+export interface SendMessagePayload {
+  readonly content: string;
+  readonly messageId: string;
+}
+
+/** Payload for STREAM_TOKEN message */
+export interface StreamTokenPayload {
+  readonly messageId: string;
+  readonly token: string;
+  readonly done: boolean;
+}
+
+/** Payload for GENERATION_COMPLETE message */
+export interface GenerationCompletePayload {
+  readonly messageId: string;
+}
+
+/** Payload for STOP_GENERATION message (empty payload) */
+export type StopGenerationPayload = Record<string, never>;
+
+/** Payload for GENERATION_CANCELLED message */
+export interface GenerationCancelledPayload {
+  readonly messageId: string;
+}
+
+/** Payload for CHAT_HISTORY message */
+export interface ChatHistoryPayload {
+  readonly messages: readonly ChatMessage[];
+}
+
 // ============================================================================
 // Message Type Mapping
 // ============================================================================
@@ -54,6 +97,12 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.STATUS_UPDATE]: StatusUpdatePayload;
   [WebviewMessageType.GET_STATUS]: GetStatusPayload;
   [WebviewMessageType.ERROR]: ErrorPayload;
+  [WebviewMessageType.SEND_MESSAGE]: SendMessagePayload;
+  [WebviewMessageType.STREAM_TOKEN]: StreamTokenPayload;
+  [WebviewMessageType.GENERATION_COMPLETE]: GenerationCompletePayload;
+  [WebviewMessageType.STOP_GENERATION]: StopGenerationPayload;
+  [WebviewMessageType.GENERATION_CANCELLED]: GenerationCancelledPayload;
+  [WebviewMessageType.CHAT_HISTORY]: ChatHistoryPayload;
 }
 
 /** Generic webview message with typed payload */
@@ -112,6 +161,67 @@ export function createErrorMessage(
   };
 }
 
+/** Create a SEND_MESSAGE message */
+export function createSendMessageMessage(
+  content: string,
+  messageId: string
+): WebviewMessage<WebviewMessageType.SEND_MESSAGE> {
+  return {
+    type: WebviewMessageType.SEND_MESSAGE,
+    payload: { content, messageId },
+  };
+}
+
+/** Create a STREAM_TOKEN message */
+export function createStreamTokenMessage(
+  messageId: string,
+  token: string,
+  done: boolean
+): WebviewMessage<WebviewMessageType.STREAM_TOKEN> {
+  return {
+    type: WebviewMessageType.STREAM_TOKEN,
+    payload: { messageId, token, done },
+  };
+}
+
+/** Create a GENERATION_COMPLETE message */
+export function createGenerationCompleteMessage(
+  messageId: string
+): WebviewMessage<WebviewMessageType.GENERATION_COMPLETE> {
+  return {
+    type: WebviewMessageType.GENERATION_COMPLETE,
+    payload: { messageId },
+  };
+}
+
+/** Create a STOP_GENERATION message */
+export function createStopGenerationMessage(): WebviewMessage<WebviewMessageType.STOP_GENERATION> {
+  return {
+    type: WebviewMessageType.STOP_GENERATION,
+    payload: {},
+  };
+}
+
+/** Create a GENERATION_CANCELLED message */
+export function createGenerationCancelledMessage(
+  messageId: string
+): WebviewMessage<WebviewMessageType.GENERATION_CANCELLED> {
+  return {
+    type: WebviewMessageType.GENERATION_CANCELLED,
+    payload: { messageId },
+  };
+}
+
+/** Create a CHAT_HISTORY message */
+export function createChatHistoryMessage(
+  messages: readonly ChatMessage[]
+): WebviewMessage<WebviewMessageType.CHAT_HISTORY> {
+  return {
+    type: WebviewMessageType.CHAT_HISTORY,
+    payload: { messages },
+  };
+}
+
 // ============================================================================
 // Type Guards
 // ============================================================================
@@ -155,4 +265,46 @@ export function isErrorMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.ERROR> {
   return isWebviewMessage(message, WebviewMessageType.ERROR);
+}
+
+/** Check if message is SEND_MESSAGE */
+export function isSendMessageMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SEND_MESSAGE> {
+  return isWebviewMessage(message, WebviewMessageType.SEND_MESSAGE);
+}
+
+/** Check if message is STREAM_TOKEN */
+export function isStreamTokenMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.STREAM_TOKEN> {
+  return isWebviewMessage(message, WebviewMessageType.STREAM_TOKEN);
+}
+
+/** Check if message is GENERATION_COMPLETE */
+export function isGenerationCompleteMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.GENERATION_COMPLETE> {
+  return isWebviewMessage(message, WebviewMessageType.GENERATION_COMPLETE);
+}
+
+/** Check if message is STOP_GENERATION */
+export function isStopGenerationMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.STOP_GENERATION> {
+  return isWebviewMessage(message, WebviewMessageType.STOP_GENERATION);
+}
+
+/** Check if message is GENERATION_CANCELLED */
+export function isGenerationCancelledMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.GENERATION_CANCELLED> {
+  return isWebviewMessage(message, WebviewMessageType.GENERATION_CANCELLED);
+}
+
+/** Check if message is CHAT_HISTORY */
+export function isChatHistoryMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.CHAT_HISTORY> {
+  return isWebviewMessage(message, WebviewMessageType.CHAT_HISTORY);
 }

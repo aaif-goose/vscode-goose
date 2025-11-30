@@ -72,19 +72,22 @@
     ]
   },
   "scripts": {
-    "build": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && bunx tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify",
+    "build": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify",
     "build:extension": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked",
     "build:webview": "bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify",
-    "build:webview:css": "bunx tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify",
+    "build:webview:css": "tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify",
     "dev": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked --watch",
     "lint": "eslint src",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "package": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && bunx tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify && vsce package",
+    "package": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify && vsce package",
     "clean": "rm -rf dist",
     "prepare": "husky"
   },
   "dependencies": {
     "fp-ts": "^2.16.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "remark-gfm": "^4.0.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -92,8 +95,9 @@
     "@commitlint/config-conventional": "^19.6.0",
     "@eslint/js": "^9.15.0",
     "@types/node": "^20.17.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "@types/vscode": "^1.95.0",
     "@vscode/vsce": "^3.2.0",
     "autoprefixer": "^10.4.16",
@@ -103,9 +107,9 @@
     "globals": "^15.12.0",
     "postcss": "^8.4.32",
     "prettier": "^3.4.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "tailwindcss": "^3.4.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "@tailwindcss/cli": "^4.1.0",
     "typescript": "^5.8.0",
     "husky": "^9.1.0",
     "typescript-eslint": "^8.15.0"

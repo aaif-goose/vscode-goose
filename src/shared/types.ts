@@ -102,3 +102,41 @@ export interface BinaryDiscoveryConfig {
   readonly env: NodeJS.ProcessEnv;
   readonly homeDir: string;
 }
+
+// ============================================================================
+// Chat UI Types
+// ============================================================================
+
+/** Role of a chat message */
+export enum MessageRole {
+  USER = 'user',
+  ASSISTANT = 'assistant',
+  ERROR = 'error',
+}
+
+/** Status of a chat message */
+export enum MessageStatus {
+  PENDING = 'pending',
+  STREAMING = 'streaming',
+  COMPLETE = 'complete',
+  CANCELLED = 'cancelled',
+  ERROR = 'error',
+}
+
+/** Chat message structure */
+export interface ChatMessage {
+  readonly id: string;
+  readonly role: MessageRole;
+  readonly content: string;
+  readonly timestamp: Date;
+  readonly status: MessageStatus;
+}
+
+/** Chat UI state */
+export interface ChatState {
+  readonly messages: readonly ChatMessage[];
+  readonly isGenerating: boolean;
+  readonly currentResponseId: string | null;
+  readonly inputDraft: string;
+  readonly focusedMessageIndex: number | null;
+}
