@@ -1,1 +1,2 @@
-npm run compile
+bun run build
+bun run lint

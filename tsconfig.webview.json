@@ -1,19 +1,17 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "lib": ["ES2022"],
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
     "noImplicitAny": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
@@ -22,13 +20,12 @@
     "baseUrl": "."
   },
   "include": [
-    "src/extension/**/*",
+    "src/webview/**/*",
     "src/shared/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "src/webview",
-    ".vscode-test"
+    "src/extension"
   ]
 }

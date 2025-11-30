@@ -1,6 +1,0 @@
-/* Import vscodeStyles.css which contains the extension UI styles */
-@import './vscodeStyles.css';
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;

@@ -16,8 +16,10 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
-  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -40,133 +42,72 @@
     "configuration": {
       "title": "Goose",
       "properties": {
-        "goose.enable": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable/disable the Goose extension"
-        },
-        "goose.logging.enabled": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Enable detailed logging to the **Goose Extension** output channel for debugging. Use the `Goose: Show Extension Logs` command to view logs."
-        },
-        "goose.logging.level": {
-          "type": "string",
-          "enum": [
-            "DEBUG",
-            "INFO",
-            "WARN",
-            "ERROR"
-          ],
-          "default": "INFO",
-          "markdownDescription": "Set the logging level. `DEBUG` is verbose."
-        },
-        "goose.logging.logSensitiveRequests": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "**WARNING:** Enable logging of potentially sensitive request/response bodies (e.g., chat content, code snippets) to the **Goose Extension** output channel. Secrets like API keys will still be redacted. Only enable this for detailed debugging with awareness of the data being logged."
-        },
-        "goose.server.path": {
+        "goose.binaryPath": {
           "type": "string",
           "default": "",
-          "description": "Custom path to the Goose Desktop installation. Leave empty for auto-detection."
+          "description": "Path to the goose binary. Leave empty for auto-detection."
+        },
+        "goose.logLevel": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "default": "info",
+          "description": "Logging level for the Goose extension."
         }
       }
     },
     "commands": [
       {
-        "command": "goose.helloWorld",
-        "title": "Hello World"
-      },
-      {
-        "command": "goose.startServer",
-        "title": "Goose: Start Server"
-      },
-      {
-        "command": "goose.stopServer",
-        "title": "Goose: Stop Server"
-      },
-      {
-        "command": "goose.askAboutSelection",
-        "title": "Ask Goose about this code"
-      },
-      {
         "command": "goose.showLogs",
-        "title": "Goose: Show Extension Logs"
-      }
-    ],
-    "menus": {
-      "editor/context": [
-        {
-          "command": "goose.askAboutSelection",
-          "when": "editorHasSelection",
-          "group": "goose"
-        }
-      ]
-    },
-    "keybindings": [
+        "title": "Goose: Show Logs"
+      },
       {
-        "command": "goose.askAboutSelection",
-        "key": "ctrl+alt+g",
-        "mac": "cmd+opt+g",
-        "when": "editorTextFocus"
+        "command": "goose.restart",
+        "title": "Goose: Restart"
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "package:dist": "npm run clean && mkdir -p dist && npm run compile && npx @vscode/vsce package --no-yarn -o dist/vscode-goose-$npm_package_version.vsix",
-    "package:skip-tests": "npm run clean && npm run compile && npx @vscode/vsce package --no-yarn",
-    "package:inspect": "npx @vscode/vsce ls --no-yarn",
-    "package:verify": "npx @vscode/vsce ls --tree",
-    "build:extension": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
-    "watch:extension": "npm run build:extension -- --watch",
-    "compile:tests": "tsc -p tsconfig.tests.json",
-    "watch:tests": "npm run compile:tests -- --watch",
-    "compile": "npm run build:extension && npm run compile:tests && npm run build:webview",
-    "watch": "npm-run-all --parallel watch:extension watch:tests dev:webview",
-    "pretest": "npm run clean && npm run compile && npm run lint",
+    "build": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && bunx tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify",
+    "build:extension": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked",
+    "build:webview": "bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify",
+    "build:webview:css": "bunx tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify",
+    "dev": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked --watch",
     "lint": "eslint src",
-    "test": "vscode-test",
-    "test:package": "node ./out/test/test/runPackageTest.js",
-    "test:webview": "cd webview-ui && npm run test",
-    "test:all": "npm run test && npm run test:webview && npm run test:package",
-    "build:webview": "cd webview-ui && npm run build",
-    "dev:webview": "cd webview-ui && npm run dev",
-    "clean": "rimraf out && rimraf webview-ui/dist && rimraf *.vsix && rimraf dist",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "package": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && bunx tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify && vsce package",
+    "clean": "rm -rf dist",
     "prepare": "husky"
   },
-  "devDependencies": {
-    "@commitlint/cli": "^19.8.0",
-    "@commitlint/config-conventional": "^19.8.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "^20.17.24",
-    "@types/react": "^18.2.45",
-    "@types/react-dom": "^18.2.18",
-    "@types/sinon": "^17.0.4",
-    "@types/vscode": "^1.95.0",
-    "@typescript-eslint/eslint-plugin": "^8.25.0",
-    "@typescript-eslint/parser": "^8.25.0",
-    "@vitejs/plugin-react": "^4.2.1",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
-    "autoprefixer": "^10.4.16",
-    "esbuild": "^0.25.3",
-    "eslint": "^9.21.0",
-    "husky": "^9.1.7",
-    "npm-run-all": "^4.1.5",
-    "postcss": "^8.4.32",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "release-please": "^17.0.0",
-    "rimraf": "^6.0.1",
-    "sinon": "^19.0.4",
-    "tailwindcss": "^3.3.6",
-    "ts-mockito": "^2.6.1",
-    "vite": "^6.3.4"
-  },
   "dependencies": {
-    "typescript": "^5.8.2",
-    "yaml": "^2.4.5"
+    "fp-ts": "^2.16.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@eslint/js": "^9.15.0",
+    "@types/node": "^20.17.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.2.0",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^9.15.0",
+    "eslint-plugin-react": "^7.37.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.12.0",
+    "postcss": "^8.4.32",
+    "prettier": "^3.4.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.8.0",
+    "husky": "^9.1.0",
+    "typescript-eslint": "^8.15.0"
   }
 }

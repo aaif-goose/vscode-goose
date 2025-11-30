@@ -11,21 +11,11 @@ out/
 dist/
 *.vsix
 .vscode-test/
-*.js
-*.js.map
-
-# Exclude these specific files from being ignored
-!webview-ui/postcss.config.js
-!webview-ui/tailwind.config.js
 
 # Binary executables
 bin/
 bin/goosed
 bin/*.exe
-
-# Webview build assets
-webview-ui/dist/
-webview-ui/node_modules/
 
 # TypeScript
 *.tsbuildinfo
@@ -52,3 +42,6 @@ Thumbs.db
 debug*.log
 coverage/
 eslint-report.*
+
+# Bun lockfile (if using bun)
+bun.lockb
