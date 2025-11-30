@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { initializeBridge, onMessage } from './bridge';
 import { ProcessStatus } from '../shared/types';
 import { isStatusUpdateMessage } from '../shared/messages';
+import { ChatContainer } from './components/chat/ChatContainer';
 
 export function App() {
   const [status, setStatus] = useState<ProcessStatus>(ProcessStatus.STOPPED);
@@ -20,13 +21,28 @@ export function App() {
     };
   }, []);
 
-  const statusText = status === ProcessStatus.RUNNING ? '🟢 Connected' : '🔴 Disconnected';
+  const isConnected = status === ProcessStatus.RUNNING;
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
-      <h1 className="text-2xl font-bold text-link mb-4">Hello Goose</h1>
-      <p className="text-[var(--vscode-descriptionForeground)] mb-2">ACP Foundation Ready</p>
-      <p className="text-sm">{statusText}</p>
-    </div>
-  );
+  if (!isConnected) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen p-4">
+        <div className="text-center">
+          <p className="text-[var(--vscode-foreground)] mb-2">
+            {status === ProcessStatus.STARTING
+              ? 'Connecting to Goose...'
+              : status === ProcessStatus.ERROR
+                ? 'Connection error'
+                : 'Waiting for Goose...'}
+          </p>
+          <p className="text-sm text-[var(--vscode-descriptionForeground)]">
+            {status === ProcessStatus.ERROR
+              ? 'Please check the Goose binary path in settings'
+              : 'The Goose agent will start automatically'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <ChatContainer className="h-screen" />;
 }
