@@ -44,9 +44,7 @@ export function MessageList({
             key={message.id}
             message={message}
             isFocused={focusedIndex === index}
-            isStreaming={
-              isGenerating && message.status === MessageStatus.STREAMING
-            }
+            isStreaming={isGenerating && message.status === MessageStatus.STREAMING}
             onFocus={() => onMessageFocus(index)}
           />
         ))}

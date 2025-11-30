@@ -9,19 +9,10 @@ interface MessageItemProps {
   onFocus: () => void;
 }
 
-export function MessageItem({
-  message,
-  isFocused,
-  isStreaming,
-  onFocus,
-}: MessageItemProps) {
+export function MessageItem({ message, isFocused, isStreaming, onFocus }: MessageItemProps) {
   const focusClasses = isFocused
     ? 'ring-2 ring-[var(--vscode-focusBorder)] ring-offset-2 ring-offset-[var(--vscode-editor-background)]'
     : '';
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(message.content);
-  };
 
   if (message.role === MessageRole.USER) {
     return (
@@ -48,7 +39,6 @@ export function MessageItem({
           content={message.content}
           timestamp={message.timestamp}
           status={message.status}
-          onCopy={handleCopy}
           isStreaming={isStreaming}
         />
       </div>

@@ -26,6 +26,8 @@ export enum WebviewMessageType {
   GENERATION_CANCELLED = 'GENERATION_CANCELLED',
   /** Extension sends chat history to webview */
   CHAT_HISTORY = 'CHAT_HISTORY',
+  /** Webview requests to open an external link in browser */
+  OPEN_EXTERNAL_LINK = 'OPEN_EXTERNAL_LINK',
 }
 
 // ============================================================================
@@ -87,6 +89,11 @@ export interface ChatHistoryPayload {
   readonly messages: readonly ChatMessage[];
 }
 
+/** Payload for OPEN_EXTERNAL_LINK message */
+export interface OpenExternalLinkPayload {
+  readonly url: string;
+}
+
 // ============================================================================
 // Message Type Mapping
 // ============================================================================
@@ -103,6 +110,7 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.STOP_GENERATION]: StopGenerationPayload;
   [WebviewMessageType.GENERATION_CANCELLED]: GenerationCancelledPayload;
   [WebviewMessageType.CHAT_HISTORY]: ChatHistoryPayload;
+  [WebviewMessageType.OPEN_EXTERNAL_LINK]: OpenExternalLinkPayload;
 }
 
 /** Generic webview message with typed payload */
@@ -222,6 +230,16 @@ export function createChatHistoryMessage(
   };
 }
 
+/** Create an OPEN_EXTERNAL_LINK message */
+export function createOpenExternalLinkMessage(
+  url: string
+): WebviewMessage<WebviewMessageType.OPEN_EXTERNAL_LINK> {
+  return {
+    type: WebviewMessageType.OPEN_EXTERNAL_LINK,
+    payload: { url },
+  };
+}
+
 // ============================================================================
 // Type Guards
 // ============================================================================
@@ -307,4 +325,11 @@ export function isChatHistoryMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.CHAT_HISTORY> {
   return isWebviewMessage(message, WebviewMessageType.CHAT_HISTORY);
+}
+
+/** Check if message is OPEN_EXTERNAL_LINK */
+export function isOpenExternalLinkMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.OPEN_EXTERNAL_LINK> {
+  return isWebviewMessage(message, WebviewMessageType.OPEN_EXTERNAL_LINK);
 }

@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { onMessage, postMessage, getState, setState } from '../bridge';
-import {
-  ChatMessage,
-  MessageRole,
-  MessageStatus,
-} from '../../shared/types';
+import { ChatMessage, MessageRole, MessageStatus } from '../../shared/types';
 import {
   createSendMessageMessage,
   createStopGenerationMessage,
@@ -76,9 +72,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         messages: state.messages.map(msg =>
-          msg.id === action.payload.messageId
-            ? { ...msg, status: MessageStatus.COMPLETE }
-            : msg
+          msg.id === action.payload.messageId ? { ...msg, status: MessageStatus.COMPLETE } : msg
         ),
         isGenerating: false,
         currentResponseId: null,
@@ -88,9 +82,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         messages: state.messages.map(msg =>
-          msg.id === action.payload.messageId
-            ? { ...msg, status: MessageStatus.CANCELLED }
-            : msg
+          msg.id === action.payload.messageId ? { ...msg, status: MessageStatus.CANCELLED } : msg
         ),
         isGenerating: false,
         currentResponseId: null,
@@ -141,6 +133,7 @@ interface PersistedState {
 
 function getInitialState(): ChatState {
   const persisted = getState<PersistedState>();
+
   return {
     messages: [],
     isGenerating: false,
