@@ -1,15 +1,23 @@
 import { ChatMessage, MessageRole } from '../../../shared/types';
 import { UserMessage } from './UserMessage';
 import { AssistantMessage } from './AssistantMessage';
+import { ErrorMessage } from './ErrorMessage';
 
 interface MessageItemProps {
   message: ChatMessage;
   isFocused: boolean;
   isStreaming: boolean;
   onFocus: () => void;
+  onRetry?: (content: string) => void;
 }
 
-export function MessageItem({ message, isFocused, isStreaming, onFocus }: MessageItemProps) {
+export function MessageItem({
+  message,
+  isFocused,
+  isStreaming,
+  onFocus,
+  onRetry,
+}: MessageItemProps) {
   const focusClasses = isFocused
     ? 'ring-2 ring-[var(--vscode-focusBorder)] ring-offset-2 ring-offset-[var(--vscode-editor-background)]'
     : '';
@@ -48,11 +56,17 @@ export function MessageItem({ message, isFocused, isStreaming, onFocus }: Messag
   if (message.role === MessageRole.ERROR) {
     return (
       <div
-        className={`${focusClasses} rounded-lg p-3 bg-[var(--vscode-inputValidation-errorBackground)] border border-[var(--vscode-inputValidation-errorBorder)]`}
+        className={`${focusClasses} rounded-lg`}
         onClick={onFocus}
         role="alert"
+        aria-label="Error message"
       >
-        <p className="text-[var(--vscode-errorForeground)]">{message.content}</p>
+        <ErrorMessage
+          content={message.content}
+          timestamp={message.timestamp}
+          onRetry={onRetry}
+          originalContent={message.originalContent}
+        />
       </div>
     );
   }

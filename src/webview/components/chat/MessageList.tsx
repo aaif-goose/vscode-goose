@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ChatMessage, MessageStatus } from '../../../shared/types';
 import { MessageItem } from './MessageItem';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
@@ -8,19 +8,36 @@ interface MessageListProps {
   isGenerating: boolean;
   focusedIndex: number | null;
   onMessageFocus: (index: number) => void;
+  onRetry: (content: string) => void;
 }
 
-export function MessageList({
-  messages,
-  isGenerating,
-  focusedIndex,
-  onMessageFocus,
-}: MessageListProps) {
+export interface MessageListHandle {
+  scrollToMessage: (index: number) => void;
+}
+
+export const MessageList = forwardRef<MessageListHandle, MessageListProps>(function MessageList(
+  { messages, isGenerating, focusedIndex, onMessageFocus, onRetry },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const { scrollToBottom } = useAutoScroll(containerRef, {
     isStreaming: isGenerating,
   });
   const prevMessageCountRef = useRef(messages.length);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      scrollToMessage: (index: number) => {
+        const messageEl = messageRefs.current.get(index);
+        if (messageEl) {
+          messageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      },
+    }),
+    []
+  );
 
   useEffect(() => {
     if (messages.length > prevMessageCountRef.current) {
@@ -52,15 +69,26 @@ export function MessageList({
     >
       <div className="flex flex-col gap-6">
         {messages.map((message, index) => (
-          <MessageItem
+          <div
             key={message.id}
-            message={message}
-            isFocused={focusedIndex === index}
-            isStreaming={isGenerating && message.status === MessageStatus.STREAMING}
-            onFocus={() => onMessageFocus(index)}
-          />
+            ref={el => {
+              if (el) {
+                messageRefs.current.set(index, el);
+              } else {
+                messageRefs.current.delete(index);
+              }
+            }}
+          >
+            <MessageItem
+              message={message}
+              isFocused={focusedIndex === index}
+              isStreaming={isGenerating && message.status === MessageStatus.STREAMING}
+              onFocus={() => onMessageFocus(index)}
+              onRetry={onRetry}
+            />
+          </div>
         ))}
       </div>
     </div>
   );
-}
+});

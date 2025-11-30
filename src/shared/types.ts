@@ -130,6 +130,7 @@ export interface ChatMessage {
   readonly content: string;
   readonly timestamp: Date;
   readonly status: MessageStatus;
+  readonly originalContent?: string;
 }
 
 /** Chat UI state */

@@ -152,6 +152,7 @@ export interface UseChatReturn {
   stopGeneration: () => void;
   focusedIndex: number | null;
   setFocusedIndex: (index: number | null) => void;
+  retryMessage: (content: string) => void;
 }
 
 export function useChat(): UseChatReturn {
@@ -227,6 +228,26 @@ export function useChat(): UseChatReturn {
     dispatch({ type: 'SET_FOCUSED_INDEX', payload: index });
   }, []);
 
+  const retryMessage = useCallback((content: string) => {
+    if (!content.trim()) return;
+
+    const userMessageId = generateId();
+    const responseId = generateId();
+
+    const userMessage: ChatMessage = {
+      id: userMessageId,
+      role: MessageRole.USER,
+      content: content.trim(),
+      timestamp: new Date(),
+      status: MessageStatus.COMPLETE,
+    };
+
+    dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
+    dispatch({ type: 'START_GENERATION', payload: { responseId } });
+
+    postMessage(createSendMessageMessage(content.trim(), userMessageId, responseId));
+  }, []);
+
   return {
     messages: state.messages,
     isGenerating: state.isGenerating,
@@ -236,5 +257,6 @@ export function useChat(): UseChatReturn {
     stopGeneration,
     focusedIndex: state.focusedIndex,
     setFocusedIndex,
+    retryMessage,
   };
 }

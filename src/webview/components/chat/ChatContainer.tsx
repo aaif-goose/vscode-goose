@@ -1,5 +1,7 @@
+import { useRef, useCallback } from 'react';
 import { useChat } from '../../hooks/useChat';
-import { MessageList } from './MessageList';
+import { useKeyboardNav } from '../../hooks/useKeyboardNav';
+import { MessageList, MessageListHandle } from './MessageList';
 import { InputArea } from './InputArea';
 
 interface ChatContainerProps {
@@ -16,15 +18,37 @@ export function ChatContainer({ className = '' }: ChatContainerProps) {
     stopGeneration,
     focusedIndex,
     setFocusedIndex,
+    retryMessage,
   } = useChat();
 
+  const messageListRef = useRef<MessageListHandle>(null);
+
+  const scrollToMessage = useCallback((index: number) => {
+    messageListRef.current?.scrollToMessage(index);
+  }, []);
+
+  useKeyboardNav({
+    messageCount: messages.length,
+    focusedIndex,
+    setFocusedIndex,
+    scrollToMessage,
+    isGenerating,
+    onStopGeneration: stopGeneration,
+  });
+
   return (
-    <div className={`flex flex-col h-full ${className}`}>
+    <div
+      className={`flex flex-col h-full ${className}`}
+      aria-busy={isGenerating}
+      aria-label="Chat with Goose"
+    >
       <MessageList
+        ref={messageListRef}
         messages={messages}
         isGenerating={isGenerating}
         focusedIndex={focusedIndex}
         onMessageFocus={setFocusedIndex}
+        onRetry={retryMessage}
       />
       <InputArea
         value={inputValue}

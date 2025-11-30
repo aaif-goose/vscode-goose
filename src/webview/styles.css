@@ -23,6 +23,11 @@
     padding: 0;
   }
 
+  .markdown-content {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
   .sr-only {
     position: absolute;
     width: 1px;
