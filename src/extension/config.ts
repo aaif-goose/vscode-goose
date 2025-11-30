@@ -17,7 +17,7 @@ export function getGooseBinaryPath(): O.Option<string> {
   return pipe(
     path,
     O.fromNullable,
-    O.filter((p) => p.length > 0)
+    O.filter(p => p.length > 0)
   );
 }
 
@@ -39,15 +39,11 @@ export function getBinaryDiscoveryConfig(): BinaryDiscoveryConfig {
 }
 
 /** Configuration change listener callback type */
-export type ConfigChangeCallback = (
-  e: vscode.ConfigurationChangeEvent
-) => void;
+export type ConfigChangeCallback = (e: vscode.ConfigurationChangeEvent) => void;
 
 /** Register a listener for configuration changes */
-export function onConfigChange(
-  callback: ConfigChangeCallback
-): vscode.Disposable {
-  return vscode.workspace.onDidChangeConfiguration((e) => {
+export function onConfigChange(callback: ConfigChangeCallback): vscode.Disposable {
+  return vscode.workspace.onDidChangeConfiguration(e => {
     if (e.affectsConfiguration(CONFIG_SECTION)) {
       callback(e);
     }
@@ -55,9 +51,6 @@ export function onConfigChange(
 }
 
 /** Check if a specific setting was changed */
-export function affectsSetting(
-  e: vscode.ConfigurationChangeEvent,
-  setting: string
-): boolean {
+export function affectsSetting(e: vscode.ConfigurationChangeEvent, setting: string): boolean {
   return e.affectsConfiguration(`${CONFIG_SECTION}.${setting}`);
 }

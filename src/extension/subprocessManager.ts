@@ -37,9 +37,7 @@ export interface SubprocessManager {
 }
 
 /** Create a subprocess manager */
-export function createSubprocessManager(
-  config: SubprocessManagerConfig
-): SubprocessManager {
+export function createSubprocessManager(config: SubprocessManagerConfig): SubprocessManager {
   const { logger, workingDirectory } = config;
 
   let status: ProcessStatus = ProcessStatus.STOPPED;
@@ -66,7 +64,7 @@ export function createSubprocessManager(
 
   const start = (binaryPath: string): TE.TaskEither<SubprocessSpawnError, void> => {
     return () =>
-      new Promise((resolve) => {
+      new Promise(resolve => {
         if (process !== null) {
           logger.warn('Subprocess already running, stopping first');
           stop()().then(() => {
@@ -98,13 +96,7 @@ export function createSubprocessManager(
       const error = err as NodeJS.ErrnoException;
       setStatus(ProcessStatus.ERROR);
       resolve(
-        E.left(
-          createSubprocessSpawnError(
-            binaryPath,
-            error.code ?? 'UNKNOWN',
-            error.errno ?? -1
-          )
-        )
+        E.left(createSubprocessSpawnError(binaryPath, error.code ?? 'UNKNOWN', error.errno ?? -1))
       );
       return;
     }
@@ -118,13 +110,7 @@ export function createSubprocessManager(
       if (!hasResolved) {
         hasResolved = true;
         resolve(
-          E.left(
-            createSubprocessSpawnError(
-              binaryPath,
-              err.code ?? 'UNKNOWN',
-              err.errno ?? -1
-            )
-          )
+          E.left(createSubprocessSpawnError(binaryPath, err.code ?? 'UNKNOWN', err.errno ?? -1))
         );
       }
     };
@@ -182,18 +168,14 @@ export function createSubprocessManager(
 
       if (!hasResolved) {
         hasResolved = true;
-        resolve(
-          E.left(
-            createSubprocessSpawnError(binaryPath, 'NO_STDIO', -1)
-          )
-        );
+        resolve(E.left(createSubprocessSpawnError(binaryPath, 'NO_STDIO', -1)));
       }
     }
   };
 
   const stop = (): TE.TaskEither<never, void> => {
     return () =>
-      new Promise((resolve) => {
+      new Promise(resolve => {
         if (process === null) {
           logger.debug('No process to stop');
           resolve(E.right(undefined));

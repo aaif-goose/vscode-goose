@@ -27,7 +27,7 @@ function formatArgs(args: unknown[]): string {
   return (
     ' ' +
     args
-      .map((arg) => {
+      .map(arg => {
         if (typeof arg === 'string') return arg;
         try {
           return JSON.stringify(arg);
@@ -55,26 +55,16 @@ export function createLogger(
     const sourceStr = source ? `[${source}] ` : '';
     const argsStr = formatArgs(args);
 
-    outputChannel.appendLine(
-      `${timestamp} [${levelStr}] ${sourceStr}${message}${argsStr}`
-    );
+    outputChannel.appendLine(`${timestamp} [${levelStr}] ${sourceStr}${message}${argsStr}`);
   };
 
   return {
-    debug: (message: string, ...args: unknown[]) =>
-      log(LogLevel.DEBUG, message, ...args),
-    info: (message: string, ...args: unknown[]) =>
-      log(LogLevel.INFO, message, ...args),
-    warn: (message: string, ...args: unknown[]) =>
-      log(LogLevel.WARN, message, ...args),
-    error: (message: string, ...args: unknown[]) =>
-      log(LogLevel.ERROR, message, ...args),
+    debug: (message: string, ...args: unknown[]) => log(LogLevel.DEBUG, message, ...args),
+    info: (message: string, ...args: unknown[]) => log(LogLevel.INFO, message, ...args),
+    warn: (message: string, ...args: unknown[]) => log(LogLevel.WARN, message, ...args),
+    error: (message: string, ...args: unknown[]) => log(LogLevel.ERROR, message, ...args),
     child: (childSource: string) =>
-      createLogger(
-        outputChannel,
-        currentLevel,
-        source ? `${source}:${childSource}` : childSource
-      ),
+      createLogger(outputChannel, currentLevel, source ? `${source}:${childSource}` : childSource),
     setLevel: (level: LogLevel) => {
       currentLevel = level;
     },

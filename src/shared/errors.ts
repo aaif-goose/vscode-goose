@@ -118,10 +118,7 @@ export function createSubprocessCrashError(
 }
 
 /** Create a JsonRpcParseError */
-export function createJsonRpcParseError(
-  rawData: string,
-  parseError: string
-): JsonRpcParseError {
+export function createJsonRpcParseError(rawData: string, parseError: string): JsonRpcParseError {
   return {
     _tag: 'JsonRpcParseError',
     message: `Failed to parse JSON-RPC message: ${parseError}`,
@@ -148,11 +145,7 @@ export function createJsonRpcTimeoutError(
 }
 
 /** Create a JsonRpcError */
-export function createJsonRpcError(
-  code: number,
-  message: string,
-  data?: unknown
-): JsonRpcError {
+export function createJsonRpcError(code: number, message: string, data?: unknown): JsonRpcError {
   return {
     _tag: 'JsonRpcError',
     message,
@@ -183,37 +176,27 @@ export function toRight<A>(value: A): E.Either<never, A> {
 // ============================================================================
 
 /** Check if error is BinaryNotFoundError */
-export function isBinaryNotFoundError(
-  error: GooseError
-): error is BinaryNotFoundError {
+export function isBinaryNotFoundError(error: GooseError): error is BinaryNotFoundError {
   return error._tag === 'BinaryNotFoundError';
 }
 
 /** Check if error is SubprocessSpawnError */
-export function isSubprocessSpawnError(
-  error: GooseError
-): error is SubprocessSpawnError {
+export function isSubprocessSpawnError(error: GooseError): error is SubprocessSpawnError {
   return error._tag === 'SubprocessSpawnError';
 }
 
 /** Check if error is SubprocessCrashError */
-export function isSubprocessCrashError(
-  error: GooseError
-): error is SubprocessCrashError {
+export function isSubprocessCrashError(error: GooseError): error is SubprocessCrashError {
   return error._tag === 'SubprocessCrashError';
 }
 
 /** Check if error is JsonRpcParseError */
-export function isJsonRpcParseError(
-  error: GooseError
-): error is JsonRpcParseError {
+export function isJsonRpcParseError(error: GooseError): error is JsonRpcParseError {
   return error._tag === 'JsonRpcParseError';
 }
 
 /** Check if error is JsonRpcTimeoutError */
-export function isJsonRpcTimeoutError(
-  error: GooseError
-): error is JsonRpcTimeoutError {
+export function isJsonRpcTimeoutError(error: GooseError): error is JsonRpcTimeoutError {
   return error._tag === 'JsonRpcTimeoutError';
 }
 
@@ -232,7 +215,7 @@ export function formatError(error: GooseError): string {
     case 'BinaryNotFoundError':
       return (
         `Goose binary not found.\n` +
-        `Searched paths:\n${error.searchedPaths.map((p) => `  - ${p}`).join('\n')}\n` +
+        `Searched paths:\n${error.searchedPaths.map(p => `  - ${p}`).join('\n')}\n` +
         `Install Goose: ${error.installationUrl}`
       );
     case 'SubprocessSpawnError':

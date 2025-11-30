@@ -7,12 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as E from 'fp-ts/Either';
 import { pipe } from 'fp-ts/function';
-import {
-  BinaryNotFoundError,
-  createBinaryNotFoundError,
-  toLeft,
-  toRight,
-} from '../shared/errors';
+import { BinaryNotFoundError, createBinaryNotFoundError, toLeft, toRight } from '../shared/errors';
 import { BinaryDiscoveryConfig } from '../shared/types';
 
 // ============================================================================
@@ -26,10 +21,7 @@ const SEARCH_PATHS: Partial<Record<NodeJS.Platform, readonly string[]>> = {
     '/usr/local/bin/goose',
     '/opt/homebrew/bin/goose',
   ],
-  win32: [
-    '%LOCALAPPDATA%\\Goose\\goose.exe',
-    '%PROGRAMFILES%\\Goose\\goose.exe',
-  ],
+  win32: ['%LOCALAPPDATA%\\Goose\\goose.exe', '%PROGRAMFILES%\\Goose\\goose.exe'],
   linux: [
     '~/.local/bin/goose',
     '/usr/local/bin/goose',
@@ -43,11 +35,7 @@ const SEARCH_PATHS: Partial<Record<NodeJS.Platform, readonly string[]>> = {
 // ============================================================================
 
 /** Expand ~ and environment variables in a path */
-export function expandPath(
-  pathStr: string,
-  homeDir: string,
-  env: NodeJS.ProcessEnv
-): string {
+export function expandPath(pathStr: string, homeDir: string, env: NodeJS.ProcessEnv): string {
   let expanded = pathStr;
 
   if (expanded.startsWith('~')) {
@@ -128,46 +116,37 @@ export function discoverBinary(
 ): E.Either<BinaryNotFoundError, string> {
   const searchedPaths: string[] = [];
 
-  return pipe(
-    config.userConfiguredPath,
-    (userPath) => {
-      if (userPath !== undefined) {
-        const expanded = expandPath(userPath, config.homeDir, config.env);
-        searchedPaths.push(expanded);
-        if (checkPathExists(expanded)) {
-          return toRight(expanded);
-        }
+  return pipe(config.userConfiguredPath, userPath => {
+    if (userPath !== undefined) {
+      const expanded = expandPath(userPath, config.homeDir, config.env);
+      searchedPaths.push(expanded);
+      if (checkPathExists(expanded)) {
+        return toRight(expanded);
       }
-
-      const pathResult = findInPath(config.env);
-      if (pathResult !== undefined) {
-        return toRight(pathResult);
-      }
-
-      const platformPaths = SEARCH_PATHS[config.platform] ?? [];
-      for (const pathStr of platformPaths) {
-        const expanded = expandPath(pathStr, config.homeDir, config.env);
-        searchedPaths.push(expanded);
-      }
-
-      const platformResult = findInPlatformPaths(
-        config.platform,
-        config.homeDir,
-        config.env
-      );
-      if (platformResult !== undefined) {
-        return toRight(platformResult);
-      }
-
-      return toLeft(createBinaryNotFoundError(searchedPaths, config.platform));
     }
-  );
+
+    const pathResult = findInPath(config.env);
+    if (pathResult !== undefined) {
+      return toRight(pathResult);
+    }
+
+    const platformPaths = SEARCH_PATHS[config.platform] ?? [];
+    for (const pathStr of platformPaths) {
+      const expanded = expandPath(pathStr, config.homeDir, config.env);
+      searchedPaths.push(expanded);
+    }
+
+    const platformResult = findInPlatformPaths(config.platform, config.homeDir, config.env);
+    if (platformResult !== undefined) {
+      return toRight(platformResult);
+    }
+
+    return toLeft(createBinaryNotFoundError(searchedPaths, config.platform));
+  });
 }
 
 /** Get all search paths that would be checked (for error messages) */
-export function getAllSearchPaths(
-  config: BinaryDiscoveryConfig
-): readonly string[] {
+export function getAllSearchPaths(config: BinaryDiscoveryConfig): readonly string[] {
   const paths: string[] = [];
 
   if (config.userConfiguredPath !== undefined) {

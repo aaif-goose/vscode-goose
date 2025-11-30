@@ -46,10 +46,7 @@ export interface JsonRpcClient {
     params?: unknown
   ) => TE.TaskEither<JsonRpcError | JsonRpcTimeoutError, T>;
 
-  readonly notify: (
-    method: string,
-    params?: unknown
-  ) => E.Either<JsonRpcParseError, void>;
+  readonly notify: (method: string, params?: unknown) => E.Either<JsonRpcParseError, void>;
 
   readonly onNotification: (callback: NotificationCallback) => void;
 
@@ -84,11 +81,7 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
           const response = message as JsonRpcResponse;
           if (response.error) {
             pending.reject(
-              createJsonRpcError(
-                response.error.code,
-                response.error.message,
-                response.error.data
-              )
+              createJsonRpcError(response.error.code, response.error.message, response.error.data)
             );
           } else {
             pending.resolve(response.result);
@@ -135,7 +128,7 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
     params?: unknown
   ): TE.TaskEither<JsonRpcError | JsonRpcTimeoutError, T> => {
     return () =>
-      new Promise((resolve) => {
+      new Promise(resolve => {
         if (disposed) {
           resolve(E.left(createJsonRpcError(-32000, 'Client disposed')));
           return;
@@ -161,8 +154,8 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
         const entry: PendingRequestEntry = {
           id,
           method,
-          resolve: (value) => resolve(E.right(value as T)),
-          reject: (error) => resolve(E.left(error)),
+          resolve: value => resolve(E.right(value as T)),
+          reject: error => resolve(E.left(error)),
           timer,
         };
 
@@ -171,7 +164,7 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
         const requestLine = JSON.stringify(rpcRequest) + '\n';
         logger.debug('Sending:', requestLine.trim());
 
-        stdin.write(requestLine, (err) => {
+        stdin.write(requestLine, err => {
           if (err) {
             clearTimeout(timer);
             pendingRequests.delete(id);
@@ -181,10 +174,7 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
       });
   };
 
-  const notify = (
-    method: string,
-    params?: unknown
-  ): E.Either<JsonRpcParseError, void> => {
+  const notify = (method: string, params?: unknown): E.Either<JsonRpcParseError, void> => {
     if (disposed) {
       return E.left(createJsonRpcParseError('', 'Client disposed'));
     }
