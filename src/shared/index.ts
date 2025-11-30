@@ -1,4 +1,4 @@
-// Shared types and utilities between extension and webview
-// This file will be populated in Milestone 2
-
-export {};
+// Re-export all shared types and utilities
+export * from './errors';
+export * from './types';
+export * from './messages';
