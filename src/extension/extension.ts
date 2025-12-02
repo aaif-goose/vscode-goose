@@ -22,16 +22,30 @@ import { ProcessStatus, JsonRpcNotification } from '../shared/types';
 import {
   isSendMessageMessage,
   isStopGenerationMessage,
+  isCreateSessionMessage,
+  isGetSessionsMessage,
+  isSelectSessionMessage,
   createStreamTokenMessage,
   createGenerationCompleteMessage,
   createGenerationCancelledMessage,
   createErrorMessage,
+  createSessionCreatedMessage,
+  createSessionsListMessage,
+  createSessionLoadedMessage,
+  createHistoryMessage,
+  createHistoryCompleteMessage,
+  createChatHistoryMessage,
 } from '../shared/messages';
 import { JsonRpcClient } from './jsonRpcClient';
+import { createSessionStorage, SessionStorage } from './sessionStorage';
+import { createSessionManager, SessionManager } from './sessionManager';
+import { DEFAULT_CAPABILITIES, SessionEntry } from '../shared/sessionTypes';
 
 let logger: Logger | null = null;
 let subprocessManager: SubprocessManager | null = null;
 let webviewProvider: WebviewProvider | null = null;
+let sessionStorage: SessionStorage | null = null;
+let sessionManager: SessionManager | null = null;
 
 // Mock streaming state
 let mockStreamingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,21 +136,23 @@ interface AcpPromptResponse {
   readonly stopReason: 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
 }
 
-interface AcpSessionNewResponse {
-  readonly sessionId: string;
-}
-
 async function initializeAcpSession(
   client: JsonRpcClient,
   workingDirectory: string,
+  manager: SessionManager,
   log: Logger
-): Promise<string | null> {
+): Promise<SessionEntry | null> {
   log.info('Initializing ACP session...');
 
-  const result = await client.request<AcpSessionNewResponse>('session/new', {
-    cwd: workingDirectory,
-    mcpServers: [],
-  })();
+  manager.initialize(client, DEFAULT_CAPABILITIES, workingDirectory);
+
+  const existingSession = manager.getActiveSession();
+  if (existingSession) {
+    log.info(`Resuming existing session: ${existingSession.sessionId}`);
+    return existingSession;
+  }
+
+  const result = await manager.createSession()();
 
   if (E.isLeft(result)) {
     log.error('Failed to create ACP session:', result.left);
@@ -144,16 +160,20 @@ async function initializeAcpSession(
   }
 
   log.info(`ACP session created: ${result.right.sessionId}`);
-  return result.right.sessionId;
+  return result.right;
 }
 
 function setupAcpCommunication(
   provider: WebviewProvider,
   client: JsonRpcClient,
-  sessionId: string,
+  manager: SessionManager,
   log: Logger
 ): void {
   let currentResponseId: string | null = null;
+
+  const getActiveSessionId = (): string | null => {
+    return manager.getActiveSessionId();
+  };
 
   client.onNotification((notification: JsonRpcNotification) => {
     const method = notification.method;
@@ -168,15 +188,38 @@ function setupAcpCommunication(
     }
   });
 
+  manager.onHistoryMessage(message => {
+    provider.postMessage(createHistoryMessage(message));
+  });
+
+  manager.onHistoryComplete((sessionId, messageCount) => {
+    provider.postMessage(createHistoryCompleteMessage(sessionId, messageCount));
+  });
+
   provider.onMessage(message => {
     if (isSendMessageMessage(message)) {
       const { content, responseId } = message.payload;
       currentResponseId = responseId;
+      const activeSessionId = getActiveSessionId();
+
+      if (!activeSessionId) {
+        log.error('No active session');
+        provider.postMessage(
+          createErrorMessage('No Active Session', 'Please create or select a session first.')
+        );
+        return;
+      }
+
       log.info(`Sending message to ACP: ${content.substring(0, 50)}...`);
+
+      const activeSession = manager.getActiveSession();
+      if (activeSession && activeSession.title === 'New Session') {
+        manager.updateSessionTitle(activeSession.sessionId, content);
+      }
 
       const sendRequest = async (): Promise<void> => {
         const result = await client.request<AcpPromptResponse>('session/prompt', {
-          sessionId,
+          sessionId: activeSessionId,
           prompt: [
             {
               type: 'text',
@@ -215,11 +258,64 @@ function setupAcpCommunication(
     }
 
     if (isStopGenerationMessage(message)) {
-      log.info('Sending cancel request to ACP');
-      const cancelResult = client.notify('session/cancel', { sessionId });
-      if (E.isLeft(cancelResult)) {
-        log.error('Failed to send cancel notification:', cancelResult.left);
+      const activeSessionId = getActiveSessionId();
+      if (activeSessionId) {
+        log.info('Sending cancel request to ACP');
+        const cancelResult = client.notify('session/cancel', { sessionId: activeSessionId });
+        if (E.isLeft(cancelResult)) {
+          log.error('Failed to send cancel notification:', cancelResult.left);
+        }
       }
+    }
+
+    if (isCreateSessionMessage(message)) {
+      log.info('Creating new session...');
+      manager
+        .createSession()()
+        .then(result => {
+          if (E.isRight(result)) {
+            provider.postMessage(createSessionCreatedMessage(result.right));
+            provider.postMessage(
+              createSessionsListMessage(manager.getSessions(), result.right.sessionId)
+            );
+            log.info(`New session created: ${result.right.sessionId}`);
+          } else {
+            log.error('Failed to create session:', result.left);
+            provider.postMessage(
+              createErrorMessage('Session Creation Failed', result.left.message)
+            );
+          }
+        });
+    }
+
+    if (isGetSessionsMessage(message)) {
+      log.debug('Sending session list');
+      provider.postMessage(
+        createSessionsListMessage(manager.getSessions(), manager.getActiveSessionId())
+      );
+    }
+
+    if (isSelectSessionMessage(message)) {
+      const { sessionId } = message.payload;
+      log.info(`Switching to session: ${sessionId}`);
+
+      // Clear chat before loading history
+      provider.postMessage(createChatHistoryMessage([]));
+
+      manager
+        .loadSession(sessionId)()
+        .then(result => {
+          if (E.isRight(result)) {
+            provider.postMessage(
+              createSessionLoadedMessage(sessionId, !manager.hasLoadSessionCapability())
+            );
+            provider.postMessage(createSessionsListMessage(manager.getSessions(), sessionId));
+            log.info(`Session loaded: ${sessionId}`);
+          } else {
+            log.error('Failed to load session:', result.left);
+            provider.postMessage(createErrorMessage('Session Load Failed', result.left.message));
+          }
+        });
     }
   });
 
@@ -268,6 +364,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   logger = createLogger(outputChannel, getLogLevel());
 
   logger.info('Goose extension activating...');
+
+  sessionStorage = createSessionStorage(context.globalState);
+  sessionManager = createSessionManager(sessionStorage, logger.child('Session'));
 
   webviewProvider = createWebviewProvider({
     extensionUri: context.extensionUri,
@@ -337,14 +436,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const clientResult = subprocessManager.getClient();
     if (E.isRight(clientResult)) {
       const client = clientResult.right;
-      const sessionId = await initializeAcpSession(
+      const session = await initializeAcpSession(
         client,
         getWorkspaceFolder(),
+        sessionManager,
         logger.child('ACP')
       );
 
-      if (sessionId) {
-        setupAcpCommunication(webviewProvider, client, sessionId, logger.child('ACP'));
+      if (session) {
+        setupAcpCommunication(webviewProvider, client, sessionManager, logger.child('ACP'));
         logger.info('ACP communication enabled');
       } else {
         setupMockStreaming(webviewProvider, logger.child('Mock'));
@@ -378,10 +478,17 @@ function registerConfigChangeHandler(context: vscode.ExtensionContext): void {
 export async function deactivate(): Promise<void> {
   logger?.info('Goose extension deactivating...');
 
+  if (sessionManager) {
+    sessionManager.dispose();
+    sessionManager = null;
+  }
+
   if (subprocessManager) {
     await subprocessManager.stop()();
     subprocessManager = null;
   }
+
+  sessionStorage = null;
 
   logger?.info('Goose extension deactivated.');
 }

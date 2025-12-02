@@ -3,6 +3,7 @@
  */
 
 import { ChatMessage, ProcessStatus } from './types';
+import { SessionEntry } from './sessionTypes';
 
 /** Types of messages that can be sent between webview and extension */
 export enum WebviewMessageType {
@@ -28,6 +29,24 @@ export enum WebviewMessageType {
   CHAT_HISTORY = 'CHAT_HISTORY',
   /** Webview requests to open an external link in browser */
   OPEN_EXTERNAL_LINK = 'OPEN_EXTERNAL_LINK',
+
+  // Session Management Messages
+  /** Webview requests to create a new session */
+  CREATE_SESSION = 'CREATE_SESSION',
+  /** Extension confirms session created */
+  SESSION_CREATED = 'SESSION_CREATED',
+  /** Webview requests session list */
+  GET_SESSIONS = 'GET_SESSIONS',
+  /** Extension sends session list */
+  SESSIONS_LIST = 'SESSIONS_LIST',
+  /** Webview requests to switch session */
+  SELECT_SESSION = 'SELECT_SESSION',
+  /** Extension confirms session loaded */
+  SESSION_LOADED = 'SESSION_LOADED',
+  /** Extension sends history message during replay */
+  HISTORY_MESSAGE = 'HISTORY_MESSAGE',
+  /** Extension signals history replay complete */
+  HISTORY_COMPLETE = 'HISTORY_COMPLETE',
 }
 
 // ============================================================================
@@ -95,6 +114,50 @@ export interface OpenExternalLinkPayload {
   readonly url: string;
 }
 
+// Session Management Payloads
+
+/** Payload for CREATE_SESSION message */
+export interface CreateSessionPayload {
+  readonly workingDirectory?: string;
+}
+
+/** Payload for SESSION_CREATED message */
+export interface SessionCreatedPayload {
+  readonly session: SessionEntry;
+}
+
+/** Payload for GET_SESSIONS message (empty payload) */
+export type GetSessionsPayload = Record<string, never>;
+
+/** Payload for SESSIONS_LIST message */
+export interface SessionsListPayload {
+  readonly sessions: readonly SessionEntry[];
+  readonly activeSessionId: string | null;
+}
+
+/** Payload for SELECT_SESSION message */
+export interface SelectSessionPayload {
+  readonly sessionId: string;
+}
+
+/** Payload for SESSION_LOADED message */
+export interface SessionLoadedPayload {
+  readonly sessionId: string;
+  readonly historyUnavailable?: boolean;
+}
+
+/** Payload for HISTORY_MESSAGE message */
+export interface HistoryMessagePayload {
+  readonly message: ChatMessage;
+  readonly isReplay: true;
+}
+
+/** Payload for HISTORY_COMPLETE message */
+export interface HistoryCompletePayload {
+  readonly sessionId: string;
+  readonly messageCount: number;
+}
+
 // ============================================================================
 // Message Type Mapping
 // ============================================================================
@@ -112,6 +175,15 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.GENERATION_CANCELLED]: GenerationCancelledPayload;
   [WebviewMessageType.CHAT_HISTORY]: ChatHistoryPayload;
   [WebviewMessageType.OPEN_EXTERNAL_LINK]: OpenExternalLinkPayload;
+  // Session Management
+  [WebviewMessageType.CREATE_SESSION]: CreateSessionPayload;
+  [WebviewMessageType.SESSION_CREATED]: SessionCreatedPayload;
+  [WebviewMessageType.GET_SESSIONS]: GetSessionsPayload;
+  [WebviewMessageType.SESSIONS_LIST]: SessionsListPayload;
+  [WebviewMessageType.SELECT_SESSION]: SelectSessionPayload;
+  [WebviewMessageType.SESSION_LOADED]: SessionLoadedPayload;
+  [WebviewMessageType.HISTORY_MESSAGE]: HistoryMessagePayload;
+  [WebviewMessageType.HISTORY_COMPLETE]: HistoryCompletePayload;
 }
 
 /** Generic webview message with typed payload */
@@ -242,6 +314,89 @@ export function createOpenExternalLinkMessage(
   };
 }
 
+// Session Management Factory Functions
+
+/** Create a CREATE_SESSION message */
+export function createCreateSessionMessage(
+  workingDirectory?: string
+): WebviewMessage<WebviewMessageType.CREATE_SESSION> {
+  return {
+    type: WebviewMessageType.CREATE_SESSION,
+    payload: { workingDirectory },
+  };
+}
+
+/** Create a SESSION_CREATED message */
+export function createSessionCreatedMessage(
+  session: SessionEntry
+): WebviewMessage<WebviewMessageType.SESSION_CREATED> {
+  return {
+    type: WebviewMessageType.SESSION_CREATED,
+    payload: { session },
+  };
+}
+
+/** Create a GET_SESSIONS message */
+export function createGetSessionsMessage(): WebviewMessage<WebviewMessageType.GET_SESSIONS> {
+  return {
+    type: WebviewMessageType.GET_SESSIONS,
+    payload: {},
+  };
+}
+
+/** Create a SESSIONS_LIST message */
+export function createSessionsListMessage(
+  sessions: readonly SessionEntry[],
+  activeSessionId: string | null
+): WebviewMessage<WebviewMessageType.SESSIONS_LIST> {
+  return {
+    type: WebviewMessageType.SESSIONS_LIST,
+    payload: { sessions, activeSessionId },
+  };
+}
+
+/** Create a SELECT_SESSION message */
+export function createSelectSessionMessage(
+  sessionId: string
+): WebviewMessage<WebviewMessageType.SELECT_SESSION> {
+  return {
+    type: WebviewMessageType.SELECT_SESSION,
+    payload: { sessionId },
+  };
+}
+
+/** Create a SESSION_LOADED message */
+export function createSessionLoadedMessage(
+  sessionId: string,
+  historyUnavailable?: boolean
+): WebviewMessage<WebviewMessageType.SESSION_LOADED> {
+  return {
+    type: WebviewMessageType.SESSION_LOADED,
+    payload: { sessionId, historyUnavailable },
+  };
+}
+
+/** Create a HISTORY_MESSAGE message */
+export function createHistoryMessage(
+  message: ChatMessage
+): WebviewMessage<WebviewMessageType.HISTORY_MESSAGE> {
+  return {
+    type: WebviewMessageType.HISTORY_MESSAGE,
+    payload: { message, isReplay: true },
+  };
+}
+
+/** Create a HISTORY_COMPLETE message */
+export function createHistoryCompleteMessage(
+  sessionId: string,
+  messageCount: number
+): WebviewMessage<WebviewMessageType.HISTORY_COMPLETE> {
+  return {
+    type: WebviewMessageType.HISTORY_COMPLETE,
+    payload: { sessionId, messageCount },
+  };
+}
+
 // ============================================================================
 // Type Guards
 // ============================================================================
@@ -334,4 +489,62 @@ export function isOpenExternalLinkMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.OPEN_EXTERNAL_LINK> {
   return isWebviewMessage(message, WebviewMessageType.OPEN_EXTERNAL_LINK);
+}
+
+// Session Management Type Guards
+
+/** Check if message is CREATE_SESSION */
+export function isCreateSessionMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.CREATE_SESSION> {
+  return isWebviewMessage(message, WebviewMessageType.CREATE_SESSION);
+}
+
+/** Check if message is SESSION_CREATED */
+export function isSessionCreatedMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SESSION_CREATED> {
+  return isWebviewMessage(message, WebviewMessageType.SESSION_CREATED);
+}
+
+/** Check if message is GET_SESSIONS */
+export function isGetSessionsMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.GET_SESSIONS> {
+  return isWebviewMessage(message, WebviewMessageType.GET_SESSIONS);
+}
+
+/** Check if message is SESSIONS_LIST */
+export function isSessionsListMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SESSIONS_LIST> {
+  return isWebviewMessage(message, WebviewMessageType.SESSIONS_LIST);
+}
+
+/** Check if message is SELECT_SESSION */
+export function isSelectSessionMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SELECT_SESSION> {
+  return isWebviewMessage(message, WebviewMessageType.SELECT_SESSION);
+}
+
+/** Check if message is SESSION_LOADED */
+export function isSessionLoadedMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SESSION_LOADED> {
+  return isWebviewMessage(message, WebviewMessageType.SESSION_LOADED);
+}
+
+/** Check if message is HISTORY_MESSAGE */
+export function isHistoryMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.HISTORY_MESSAGE> {
+  return isWebviewMessage(message, WebviewMessageType.HISTORY_MESSAGE);
+}
+
+/** Check if message is HISTORY_COMPLETE */
+export function isHistoryCompleteMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.HISTORY_COMPLETE> {
+  return isWebviewMessage(message, WebviewMessageType.HISTORY_COMPLETE);
 }

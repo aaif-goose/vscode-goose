@@ -8,6 +8,8 @@ import {
   isGenerationCompleteMessage,
   isGenerationCancelledMessage,
   isChatHistoryMessage,
+  isHistoryMessage,
+  isSessionCreatedMessage,
 } from '../../shared/messages';
 
 interface ChatState {
@@ -27,7 +29,9 @@ type ChatAction =
   | { type: 'SET_MESSAGES'; payload: ChatMessage[] }
   | { type: 'SET_INPUT'; payload: string }
   | { type: 'SET_FOCUSED_INDEX'; payload: number | null }
-  | { type: 'ADD_ERROR_MESSAGE'; payload: { id: string; content: string } };
+  | { type: 'ADD_ERROR_MESSAGE'; payload: { id: string; content: string } }
+  | { type: 'ADD_HISTORY_MESSAGE'; payload: ChatMessage }
+  | { type: 'CLEAR_MESSAGES' };
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -122,6 +126,20 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     }
 
+    case 'ADD_HISTORY_MESSAGE':
+      return {
+        ...state,
+        messages: [...state.messages, action.payload],
+      };
+
+    case 'CLEAR_MESSAGES':
+      return {
+        ...state,
+        messages: [],
+        isGenerating: false,
+        currentResponseId: null,
+      };
+
     default:
       return state;
   }
@@ -189,6 +207,18 @@ export function useChat(): UseChatReturn {
           type: 'SET_MESSAGES',
           payload: message.payload.messages as ChatMessage[],
         });
+      } else if (isHistoryMessage(message)) {
+        // Convert timestamp from string (JSON serialized) back to Date
+        const msg = message.payload.message;
+        dispatch({
+          type: 'ADD_HISTORY_MESSAGE',
+          payload: {
+            ...msg,
+            timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp,
+          },
+        });
+      } else if (isSessionCreatedMessage(message)) {
+        dispatch({ type: 'CLEAR_MESSAGES' });
       }
     });
 

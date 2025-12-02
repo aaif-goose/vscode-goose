@@ -1,4 +1,5 @@
 export { ChatContainer } from './ChatContainer';
+export { ChatView } from './ChatView';
 export { MessageList } from './MessageList';
 export { MessageItem } from './MessageItem';
 export { UserMessage } from './UserMessage';
