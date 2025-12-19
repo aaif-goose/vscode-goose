@@ -12,12 +12,12 @@ import {
   formatError,
   isBinaryNotFoundError,
   isSubprocessSpawnError,
-  BinaryNotFoundError,
   SubprocessSpawnError,
 } from '../shared/errors';
 import { createSubprocessManager, SubprocessManager } from './subprocessManager';
 import { createWebviewProvider, WebviewProvider } from './webviewProvider';
 import { registerCommands } from './commands';
+import { checkVersion, MINIMUM_VERSION } from './versionChecker';
 import { ProcessStatus, JsonRpcNotification } from '../shared/types';
 import {
   isSendMessageMessage,
@@ -25,6 +25,7 @@ import {
   isCreateSessionMessage,
   isGetSessionsMessage,
   isSelectSessionMessage,
+  isOpenExternalLinkMessage,
   createStreamTokenMessage,
   createGenerationCompleteMessage,
   createGenerationCancelledMessage,
@@ -330,20 +331,15 @@ function getWorkspaceFolder(): string {
   return process.cwd();
 }
 
-function showBinaryNotFoundError(error: BinaryNotFoundError): void {
-  vscode.window
-    .showErrorMessage(
-      'Goose binary not found. Please install Goose or configure goose.binaryPath.',
-      'Install Goose',
-      'Open Settings'
-    )
-    .then(selection => {
-      if (selection === 'Install Goose') {
-        vscode.env.openExternal(vscode.Uri.parse(error.installationUrl));
-      } else if (selection === 'Open Settings') {
-        vscode.commands.executeCommand('workbench.action.openSettings', 'goose.binaryPath');
-      }
-    });
+function setupExternalLinkHandler(provider: WebviewProvider, log: Logger): void {
+  provider.onMessage(message => {
+    if (isOpenExternalLinkMessage(message)) {
+      const { url } = message.payload;
+      log.info(`Opening external link: ${url}`);
+      vscode.env.openExternal(vscode.Uri.parse(url));
+    }
+  });
+  log.debug('External link handler registered');
 }
 
 function showSubprocessError(error: SubprocessSpawnError): void {
@@ -384,6 +380,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     getSubprocessManager: () => subprocessManager,
   });
 
+  setupExternalLinkHandler(webviewProvider, logger.child('Links'));
+
   const binaryResult = discoverBinary(getBinaryDiscoveryConfig());
 
   if (E.isLeft(binaryResult)) {
@@ -391,15 +389,44 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.error('Binary discovery failed:', formatError(error));
 
     if (isBinaryNotFoundError(error)) {
-      showBinaryNotFoundError(error);
+      // Send version status to webview for in-panel messaging
+      webviewProvider.updateVersionStatus({
+        status: 'blocked_missing',
+        minimumVersion: MINIMUM_VERSION,
+        installUrl: 'https://block.github.io/goose/docs/quickstart',
+      });
     }
 
-    logger.info('Goose extension activated (binary not found - limited functionality).');
+    logger.info('Goose extension activated (binary not found - version check blocked).');
     return;
   }
 
   const binaryPath = binaryResult.right;
   logger.info(`Found goose binary at: ${binaryPath}`);
+
+  // Version check before spawning subprocess
+  const versionResult = await checkVersion(binaryPath)();
+
+  if (E.isLeft(versionResult)) {
+    const error = versionResult.left;
+    logger.error(
+      `Goose version check failed: detected ${error.detectedVersion}, requires ${error.minimumVersion}`
+    );
+
+    webviewProvider.updateVersionStatus({
+      status: 'blocked_outdated',
+      detectedVersion: error.detectedVersion,
+      minimumVersion: error.minimumVersion,
+      updateUrl: error.updateUrl,
+    });
+
+    logger.info('Goose extension activated (version incompatible - version check blocked).');
+    return;
+  }
+
+  logger.info(
+    `Goose version ${versionResult.right.version} detected (meets minimum ${MINIMUM_VERSION})`
+  );
 
   subprocessManager = createSubprocessManager({
     logger: logger.child('Subprocess'),

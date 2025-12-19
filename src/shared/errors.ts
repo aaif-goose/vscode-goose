@@ -55,6 +55,14 @@ export interface JsonRpcError extends BaseError {
   readonly data?: unknown;
 }
 
+/** Error when the Goose version is below minimum required */
+export interface VersionMismatchError extends BaseError {
+  readonly _tag: 'VersionMismatchError';
+  readonly detectedVersion: string;
+  readonly minimumVersion: string;
+  readonly updateUrl: string;
+}
+
 /** Union of all possible Goose domain errors */
 export type GooseError =
   | BinaryNotFoundError
@@ -62,9 +70,11 @@ export type GooseError =
   | SubprocessCrashError
   | JsonRpcParseError
   | JsonRpcTimeoutError
-  | JsonRpcError;
+  | JsonRpcError
+  | VersionMismatchError;
 
 const INSTALLATION_URL = 'https://block.github.io/goose';
+const UPDATE_URL = 'https://block.github.io/goose/docs/guides/updating-goose/';
 
 /** Create a BinaryNotFoundError */
 export function createBinaryNotFoundError(
@@ -155,6 +165,21 @@ export function createJsonRpcError(code: number, message: string, data?: unknown
   };
 }
 
+/** Create a VersionMismatchError */
+export function createVersionMismatchError(
+  detectedVersion: string,
+  minimumVersion: string
+): VersionMismatchError {
+  return {
+    _tag: 'VersionMismatchError',
+    message: `Goose version ${detectedVersion} is below minimum required ${minimumVersion}`,
+    timestamp: new Date(),
+    detectedVersion,
+    minimumVersion,
+    updateUrl: UPDATE_URL,
+  };
+}
+
 // ============================================================================
 // fp-ts Integration Helpers
 // ============================================================================
@@ -205,6 +230,11 @@ export function isJsonRpcError(error: GooseError): error is JsonRpcError {
   return error._tag === 'JsonRpcError';
 }
 
+/** Check if error is VersionMismatchError */
+export function isVersionMismatchError(error: GooseError): error is VersionMismatchError {
+  return error._tag === 'VersionMismatchError';
+}
+
 // ============================================================================
 // Error Formatting
 // ============================================================================
@@ -239,5 +269,11 @@ export function formatError(error: GooseError): string {
       return `Request '${error.method}' timed out after ${error.timeoutMs}ms`;
     case 'JsonRpcError':
       return `Goose error (${error.code}): ${error.message}`;
+    case 'VersionMismatchError':
+      return (
+        `Goose version ${error.detectedVersion} is not supported.\n` +
+        `Minimum required version: ${error.minimumVersion}\n` +
+        `Update Goose: ${error.updateUrl}`
+      );
   }
 }

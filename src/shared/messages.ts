@@ -47,6 +47,10 @@ export enum WebviewMessageType {
   HISTORY_MESSAGE = 'HISTORY_MESSAGE',
   /** Extension signals history replay complete */
   HISTORY_COMPLETE = 'HISTORY_COMPLETE',
+
+  // Version Status Messages
+  /** Extension sends version compatibility status to webview */
+  VERSION_STATUS = 'VERSION_STATUS',
 }
 
 // ============================================================================
@@ -158,6 +162,17 @@ export interface HistoryCompletePayload {
   readonly messageCount: number;
 }
 
+// Version Status Payloads
+
+/** Payload for VERSION_STATUS message */
+export interface VersionStatusPayload {
+  readonly status: 'blocked_missing' | 'blocked_outdated' | 'compatible';
+  readonly detectedVersion?: string;
+  readonly minimumVersion: string;
+  readonly installUrl?: string;
+  readonly updateUrl?: string;
+}
+
 // ============================================================================
 // Message Type Mapping
 // ============================================================================
@@ -184,6 +199,8 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.SESSION_LOADED]: SessionLoadedPayload;
   [WebviewMessageType.HISTORY_MESSAGE]: HistoryMessagePayload;
   [WebviewMessageType.HISTORY_COMPLETE]: HistoryCompletePayload;
+  // Version Status
+  [WebviewMessageType.VERSION_STATUS]: VersionStatusPayload;
 }
 
 /** Generic webview message with typed payload */
@@ -397,6 +414,30 @@ export function createHistoryCompleteMessage(
   };
 }
 
+// Version Status Factory Functions
+
+/** Create a VERSION_STATUS message */
+export function createVersionStatusMessage(
+  status: VersionStatusPayload['status'],
+  minimumVersion: string,
+  options?: {
+    detectedVersion?: string;
+    installUrl?: string;
+    updateUrl?: string;
+  }
+): WebviewMessage<WebviewMessageType.VERSION_STATUS> {
+  return {
+    type: WebviewMessageType.VERSION_STATUS,
+    payload: {
+      status,
+      minimumVersion,
+      detectedVersion: options?.detectedVersion,
+      installUrl: options?.installUrl,
+      updateUrl: options?.updateUrl,
+    },
+  };
+}
+
 // ============================================================================
 // Type Guards
 // ============================================================================
@@ -547,4 +588,13 @@ export function isHistoryCompleteMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.HISTORY_COMPLETE> {
   return isWebviewMessage(message, WebviewMessageType.HISTORY_COMPLETE);
+}
+
+// Version Status Type Guards
+
+/** Check if message is VERSION_STATUS */
+export function isVersionStatusMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.VERSION_STATUS> {
+  return isWebviewMessage(message, WebviewMessageType.VERSION_STATUS);
 }

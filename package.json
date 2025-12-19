@@ -77,6 +77,8 @@
     "build:webview": "bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify",
     "build:webview:css": "tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify",
     "dev": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked --watch",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
     "lint": "eslint src",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "package": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify && vsce package",

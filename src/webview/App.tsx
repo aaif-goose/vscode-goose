@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
 import { initializeBridge, onMessage } from './bridge';
 import { ProcessStatus } from '../shared/types';
-import { isStatusUpdateMessage } from '../shared/messages';
+import {
+  isStatusUpdateMessage,
+  isVersionStatusMessage,
+  VersionStatusPayload,
+} from '../shared/messages';
 import { ChatView } from './components/chat/ChatView';
 import { SessionHeader, SessionList } from './components/session';
+import { VersionBlockedView } from './components/VersionBlockedView';
 import { useSession } from './hooks/useSession';
 import { useChat } from './hooks/useChat';
 
 export function App() {
   const [status, setStatus] = useState<ProcessStatus>(ProcessStatus.STOPPED);
+  const [versionStatus, setVersionStatus] = useState<VersionStatusPayload | null>(null);
   const {
     activeSession,
     groupedSessions,
@@ -34,6 +40,9 @@ export function App() {
       if (isStatusUpdateMessage(message)) {
         setStatus(message.payload.status);
       }
+      if (isVersionStatusMessage(message)) {
+        setVersionStatus(message.payload);
+      }
     });
 
     return () => {
@@ -42,6 +51,20 @@ export function App() {
   }, []);
 
   const isConnected = status === ProcessStatus.RUNNING;
+  const isVersionBlocked =
+    versionStatus?.status === 'blocked_missing' || versionStatus?.status === 'blocked_outdated';
+
+  if (isVersionBlocked && versionStatus) {
+    return (
+      <VersionBlockedView
+        status={versionStatus.status as 'blocked_missing' | 'blocked_outdated'}
+        detectedVersion={versionStatus.detectedVersion}
+        minimumVersion={versionStatus.minimumVersion}
+        installUrl={versionStatus.installUrl}
+        updateUrl={versionStatus.updateUrl}
+      />
+    );
+  }
 
   if (!isConnected) {
     return (

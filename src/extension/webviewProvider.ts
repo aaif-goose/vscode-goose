@@ -9,6 +9,8 @@ import {
   AnyWebviewMessage,
   isWebviewReadyMessage,
   createStatusUpdateMessage,
+  createVersionStatusMessage,
+  VersionStatusPayload,
 } from '../shared/messages';
 import { ProcessStatus } from '../shared/types';
 
@@ -26,6 +28,7 @@ export interface WebviewProvider extends vscode.WebviewViewProvider {
   readonly postMessage: (message: AnyWebviewMessage) => void;
   readonly onMessage: (callback: MessageCallback) => vscode.Disposable;
   readonly updateStatus: (status: ProcessStatus) => void;
+  readonly updateVersionStatus: (payload: VersionStatusPayload) => void;
 }
 
 /** Create a webview provider */
@@ -79,6 +82,16 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
 
   const updateStatus = (status: ProcessStatus): void => {
     postMessage(createStatusUpdateMessage(status));
+  };
+
+  const updateVersionStatus = (payload: VersionStatusPayload): void => {
+    postMessage(
+      createVersionStatusMessage(payload.status, payload.minimumVersion, {
+        detectedVersion: payload.detectedVersion,
+        installUrl: payload.installUrl,
+        updateUrl: payload.updateUrl,
+      })
+    );
   };
 
   const handleMessage = (message: unknown): void => {
@@ -166,5 +179,6 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
     postMessage,
     onMessage,
     updateStatus,
+    updateVersionStatus,
   };
 }
