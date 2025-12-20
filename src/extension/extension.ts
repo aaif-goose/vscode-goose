@@ -424,6 +424,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerContextCommands(context, {
     logger: logger.child('Context'),
     webviewProvider,
+    getSessionManager: () => sessionManager,
   });
 
   setupExternalLinkHandler(webviewProvider, logger.child('Links'));

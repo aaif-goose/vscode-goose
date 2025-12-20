@@ -74,6 +74,7 @@ function generateChipId(): string {
 export interface ContextCommandDependencies {
   readonly logger: Logger;
   readonly webviewProvider: WebviewProvider;
+  readonly getSessionManager: () => import('./sessionManager').SessionManager | null;
 }
 
 /** Register context-related commands (selection to chat) */
@@ -81,14 +82,30 @@ export function registerContextCommands(
   context: vscode.ExtensionContext,
   deps: ContextCommandDependencies
 ): void {
-  const { logger, webviewProvider } = deps;
+  const { logger, webviewProvider, getSessionManager } = deps;
 
   context.subscriptions.push(
     vscode.commands.registerTextEditorCommand(
       'goose.sendSelectionToChat',
-      (editor: vscode.TextEditor) => {
+      async (editor: vscode.TextEditor) => {
         const selection = editor.selection;
         const document = editor.document;
+
+        // Reveal the Goose panel
+        await vscode.commands.executeCommand('goose.chatView.focus');
+
+        // Ensure there's an active session
+        const sessionManager = getSessionManager();
+        if (sessionManager && !sessionManager.getActiveSession()) {
+          logger.info('No active session, creating new one for context chip');
+          const result = await sessionManager.createSession()();
+          if (E.isLeft(result)) {
+            logger.error('Failed to create session for context chip:', result.left);
+          }
+        }
+
+        // Wait for webview to be ready before sending chip
+        await webviewProvider.waitForReady();
 
         const chip: ContextChip = {
           id: generateChipId(),

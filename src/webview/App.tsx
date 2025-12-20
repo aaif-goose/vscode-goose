@@ -11,6 +11,7 @@ import { SessionHeader, SessionList } from './components/session';
 import { VersionBlockedView } from './components/VersionBlockedView';
 import { useSession } from './hooks/useSession';
 import { useChat } from './hooks/useChat';
+import { useContextChips } from './hooks/useContextChips';
 
 export function App() {
   const [status, setStatus] = useState<ProcessStatus>(ProcessStatus.STOPPED);
@@ -32,6 +33,9 @@ export function App() {
 
   // Keep useChat at App level so message handlers are always registered
   const chat = useChat();
+
+  // Keep useContextChips at App level so chip messages are received even before ChatView mounts
+  const contextChips = useContextChips();
 
   useEffect(() => {
     initializeBridge();
@@ -91,6 +95,7 @@ export function App() {
     <div className="flex flex-col h-screen">
       <SessionHeader
         activeSession={activeSession}
+        hasMessages={chat.messages.length > 0}
         onHistoryClick={togglePanel}
         onNewSessionClick={createSession}
       />
@@ -116,7 +121,7 @@ export function App() {
               Session history is not available. Continue from where you left off.
             </div>
           )}
-          <ChatView className="flex-1" chat={chat} />
+          <ChatView className="flex-1" chat={chat} contextChips={contextChips} />
         </>
       )}
     </div>

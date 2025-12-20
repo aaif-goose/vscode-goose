@@ -29,6 +29,7 @@ export interface WebviewProvider extends vscode.WebviewViewProvider {
   readonly onMessage: (callback: MessageCallback) => vscode.Disposable;
   readonly updateStatus: (status: ProcessStatus) => void;
   readonly updateVersionStatus: (payload: VersionStatusPayload) => void;
+  readonly waitForReady: () => Promise<void>;
 }
 
 /** Create a webview provider */
@@ -39,6 +40,7 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
   let isReady = false;
   const messageQueue: AnyWebviewMessage[] = [];
   const messageCallbacks: MessageCallback[] = [];
+  const readyCallbacks: (() => void)[] = [];
 
   // Track last known state to re-send on webview reconnect
   let lastStatus: ProcessStatus | null = null;
@@ -125,6 +127,11 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
       isReady = true;
       flushQueue();
       resendState();
+      // Resolve any pending waitForReady promises
+      while (readyCallbacks.length > 0) {
+        const cb = readyCallbacks.shift();
+        cb?.();
+      }
       return;
     }
 
@@ -135,6 +142,15 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
         logger.error('Message callback error:', err);
       }
     }
+  };
+
+  const waitForReady = (): Promise<void> => {
+    if (isReady) {
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      readyCallbacks.push(resolve);
+    });
   };
 
   const getNonce = (): string => {
@@ -204,5 +220,6 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
     onMessage,
     updateStatus,
     updateVersionStatus,
+    waitForReady,
   };
 }

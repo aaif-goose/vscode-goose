@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react';
 import { UseChatReturn } from '../../hooks/useChat';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
-import { useContextChips } from '../../hooks/useContextChips';
+import { UseContextChipsReturn } from '../../hooks/useContextChips';
 import { MessageList, MessageListHandle } from './MessageList';
 import { InputArea } from './InputArea';
 import type { FileSearchResult, ContextChip } from '../../../shared/contextTypes';
@@ -9,9 +9,10 @@ import type { FileSearchResult, ContextChip } from '../../../shared/contextTypes
 interface ChatViewProps {
   className?: string;
   chat: UseChatReturn;
+  contextChips: UseContextChipsReturn;
 }
 
-export function ChatView({ className = '', chat }: ChatViewProps) {
+export function ChatView({ className = '', chat, contextChips }: ChatViewProps) {
   const {
     messages,
     isGenerating,
@@ -34,7 +35,7 @@ export function ChatView({ className = '', chat }: ChatViewProps) {
     getContextPrefix,
     hasDuplicate,
     announcement: chipAnnouncement,
-  } = useContextChips();
+  } = contextChips;
 
   const messageListRef = useRef<MessageListHandle>(null);
 
