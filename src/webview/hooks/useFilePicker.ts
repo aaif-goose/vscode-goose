@@ -224,7 +224,12 @@ export function useFilePicker(
           return true;
 
         case 'Tab':
-          // Close picker on Tab but don't prevent default
+          // Tab selects the highlighted result (like Enter)
+          if (state.results.length > 0 && state.selectedIndex < state.results.length) {
+            e.preventDefault();
+            selectResult(state.results[state.selectedIndex]);
+            return true;
+          }
           close();
           return false;
 
