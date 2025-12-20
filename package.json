@@ -35,7 +35,7 @@
         {
           "type": "webview",
           "id": "goose.chatView",
-          "name": "Chat"
+          "name": ""
         }
       ]
     },
