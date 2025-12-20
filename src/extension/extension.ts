@@ -16,7 +16,7 @@ import {
 } from '../shared/errors';
 import { createSubprocessManager, SubprocessManager } from './subprocessManager';
 import { createWebviewProvider, WebviewProvider } from './webviewProvider';
-import { registerCommands } from './commands';
+import { registerCommands, registerContextCommands } from './commands';
 import { checkVersion, MINIMUM_VERSION } from './versionChecker';
 import { ProcessStatus, JsonRpcNotification } from '../shared/types';
 import {
@@ -26,6 +26,7 @@ import {
   isGetSessionsMessage,
   isSelectSessionMessage,
   isOpenExternalLinkMessage,
+  isFileSearchMessage,
   createStreamTokenMessage,
   createGenerationCompleteMessage,
   createGenerationCancelledMessage,
@@ -36,10 +37,12 @@ import {
   createHistoryMessage,
   createHistoryCompleteMessage,
   createChatHistoryMessage,
+  createSearchResultsMessage,
 } from '../shared/messages';
 import { JsonRpcClient } from './jsonRpcClient';
 import { createSessionStorage, SessionStorage } from './sessionStorage';
 import { createSessionManager, SessionManager } from './sessionManager';
+import { createFileSearchService, FileSearchService } from './fileSearchService';
 import { DEFAULT_CAPABILITIES, SessionEntry } from '../shared/sessionTypes';
 
 let logger: Logger | null = null;
@@ -47,6 +50,7 @@ let subprocessManager: SubprocessManager | null = null;
 let webviewProvider: WebviewProvider | null = null;
 let sessionStorage: SessionStorage | null = null;
 let sessionManager: SessionManager | null = null;
+let fileSearchService: FileSearchService | null = null;
 
 // Mock streaming state
 let mockStreamingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -149,8 +153,20 @@ async function initializeAcpSession(
 
   const existingSession = manager.getActiveSession();
   if (existingSession) {
-    log.info(`Resuming existing session: ${existingSession.sessionId}`);
-    return existingSession;
+    log.info(`Found existing session: ${existingSession.sessionId}, attempting to restore...`);
+
+    // Try to restore the session with the server
+    if (manager.hasLoadSessionCapability()) {
+      const loadResult = await manager.loadSession(existingSession.sessionId)();
+      if (E.isRight(loadResult)) {
+        log.info(`Successfully restored session: ${existingSession.sessionId}`);
+        return existingSession;
+      }
+      log.warn(`Failed to restore session ${existingSession.sessionId}, creating new session`);
+    } else {
+      // Server doesn't support session/load - create a fresh session
+      log.info('Server does not support session/load, creating new session');
+    }
   }
 
   const result = await manager.createSession()();
@@ -342,6 +358,29 @@ function setupExternalLinkHandler(provider: WebviewProvider, log: Logger): void 
   log.debug('External link handler registered');
 }
 
+function setupFileSearchHandler(
+  provider: WebviewProvider,
+  searchService: FileSearchService,
+  log: Logger
+): void {
+  provider.onMessage(async message => {
+    if (isFileSearchMessage(message)) {
+      const { query } = message.payload;
+      log.debug(`File search request: "${query}"`);
+
+      try {
+        const results = await searchService.search(query);
+        provider.postMessage(createSearchResultsMessage(results));
+        log.debug(`File search returned ${results.length} results`);
+      } catch (error) {
+        log.error('File search failed:', error);
+        provider.postMessage(createSearchResultsMessage([]));
+      }
+    }
+  });
+  log.debug('File search handler registered');
+}
+
 function showSubprocessError(error: SubprocessSpawnError): void {
   vscode.window
     .showErrorMessage(
@@ -370,7 +409,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   });
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('goose.chatView', webviewProvider)
+    vscode.window.registerWebviewViewProvider('goose.chatView', webviewProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    })
   );
 
   registerCommands(context, {
@@ -380,7 +421,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     getSubprocessManager: () => subprocessManager,
   });
 
+  registerContextCommands(context, {
+    logger: logger.child('Context'),
+    webviewProvider,
+  });
+
   setupExternalLinkHandler(webviewProvider, logger.child('Links'));
+
+  fileSearchService = createFileSearchService(logger.child('FileSearch'));
+  setupFileSearchHandler(webviewProvider, fileSearchService, logger.child('FileSearch'));
 
   const binaryResult = discoverBinary(getBinaryDiscoveryConfig());
 
@@ -508,6 +557,11 @@ export async function deactivate(): Promise<void> {
   if (sessionManager) {
     sessionManager.dispose();
     sessionManager = null;
+  }
+
+  if (fileSearchService) {
+    fileSearchService.dispose();
+    fileSearchService = null;
   }
 
   if (subprocessManager) {

@@ -1,6 +1,12 @@
-import { useRef, useEffect, KeyboardEvent } from 'react';
+import { useRef, useEffect, KeyboardEvent, useCallback } from 'react';
 import { SendButton } from './SendButton';
 import { StopButton } from './StopButton';
+import { ChipStack } from './ChipStack';
+import { FilePicker } from '../picker/FilePicker';
+import { useFilePicker } from '../../hooks/useFilePicker';
+import { onMessage } from '../../bridge';
+import { isFocusChatInputMessage } from '../../../shared/messages';
+import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
 
 interface InputAreaProps {
   value: string;
@@ -9,6 +15,14 @@ interface InputAreaProps {
   onStop: () => void;
   isGenerating: boolean;
   disabled: boolean;
+  chips?: readonly ContextChip[];
+  onRemoveChip?: (chipId: string) => void;
+  chipFocusedIndex?: number | null;
+  onChipFocusChange?: (index: number | null) => void;
+  getContextPrefix?: () => string;
+  onClearChips?: () => void;
+  onAddFileChip?: (result: FileSearchResult) => void;
+  chipAnnouncement?: string | null;
 }
 
 const MAX_HEIGHT = 200;
@@ -21,8 +35,21 @@ export function InputArea({
   onStop,
   isGenerating,
   disabled,
+  chips = [],
+  onRemoveChip,
+  chipFocusedIndex = null,
+  onChipFocusChange,
+  getContextPrefix,
+  onClearChips,
+  onAddFileChip,
+  chipAnnouncement = null,
 }: InputAreaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Initialize file picker hook
+  const noopAddChip = useCallback(() => {}, []);
+  const filePicker = useFilePicker(onAddFileChip ?? noopAddChip, textareaRef, onChange);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -33,25 +60,176 @@ export function InputArea({
     textarea.style.height = `${newHeight}px`;
   }, [value]);
 
+  // Click outside handler to close file picker
+  useEffect(() => {
+    if (!filePicker.isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        filePicker.close();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when isOpen or close changes, not entire filePicker object
+  }, [filePicker.isOpen, filePicker.close]);
+
+  // Subscribe to FOCUS_CHAT_INPUT message from extension
+  useEffect(() => {
+    const unsubscribe = onMessage(message => {
+      if (isFocusChatInputMessage(message)) {
+        textareaRef.current?.focus();
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleSend = useCallback(() => {
+    if (disabled || isGenerating) return;
+
+    const userInput = value.trim();
+    const contextPrefix = getContextPrefix?.() ?? '';
+    const fullMessage = contextPrefix + userInput;
+
+    if (!fullMessage.trim()) return;
+
+    // If we have context but no user input, still allow sending
+    // If we have user input (with or without context), prepend context
+    if (contextPrefix && userInput) {
+      // Set the full message with context prefix
+      onChange(fullMessage);
+      // Use setTimeout to ensure state updates before send
+      setTimeout(() => {
+        onSend();
+        onClearChips?.();
+      }, 0);
+    } else if (contextPrefix && !userInput) {
+      // Only context, no user message - send just context
+      onChange(contextPrefix.trim());
+      setTimeout(() => {
+        onSend();
+        onClearChips?.();
+      }, 0);
+    } else {
+      // No context, just user input
+      onSend();
+    }
+  }, [value, disabled, isGenerating, getContextPrefix, onChange, onSend, onClearChips]);
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Pass keyboard events to file picker first
+    if (filePicker.handleKeyDown(e)) {
+      return;
+    }
+
+    const textarea = textareaRef.current;
+    const cursorAtStart = textarea?.selectionStart === 0 && textarea?.selectionEnd === 0;
+
+    // Handle keyboard navigation to chips
+    if (chips.length > 0 && onChipFocusChange) {
+      // Backspace at empty input or cursor at position 0 focuses last chip
+      if (e.key === 'Backspace' && (value === '' || cursorAtStart)) {
+        e.preventDefault();
+        onChipFocusChange(chips.length - 1);
+        return;
+      }
+
+      // Arrow left at input start moves focus to chip area
+      if (e.key === 'ArrowLeft' && cursorAtStart) {
+        e.preventDefault();
+        onChipFocusChange(chips.length - 1);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (!disabled && !isGenerating && value.trim()) {
-        onSend();
-      }
+      handleSend();
     }
   };
 
-  const canSend = !disabled && !isGenerating && value.trim().length > 0;
+  // Can send if there's user input OR if there are chips (context to send)
+  const canSend = !disabled && !isGenerating && (value.trim().length > 0 || chips.length > 0);
+
+  // Focus input when chip focus is cleared (e.g., after ArrowRight from last chip or Tab)
+  useEffect(() => {
+    if (chipFocusedIndex === null && chips.length > 0) {
+      // Only refocus if we had chips (indicating navigation occurred)
+      // This is handled by the ChipStack component setting focusedIndex to null
+    }
+  }, [chipFocusedIndex, chips.length]);
+
+  const handleRemoveChip = useCallback(
+    (chipId: string) => {
+      onRemoveChip?.(chipId);
+    },
+    [onRemoveChip]
+  );
+
+  const handleChipFocusChange = useCallback(
+    (index: number | null) => {
+      onChipFocusChange?.(index);
+      // If focus is moving out of chips (index is null), focus the textarea
+      if (index === null) {
+        textareaRef.current?.focus();
+      }
+    },
+    [onChipFocusChange]
+  );
+
+  // Handle input change - update value and trigger @ detection
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newValue = e.target.value;
+      const cursorPosition = e.target.selectionStart ?? 0;
+
+      onChange(newValue);
+      filePicker.handleInput(newValue, cursorPosition);
+    },
+    [onChange, filePicker]
+  );
+
+  // File picker navigation handlers
+  const handleFilePickerNavigate = useCallback(
+    (direction: 'up' | 'down') => {
+      const e = {
+        key: direction === 'up' ? 'ArrowUp' : 'ArrowDown',
+        preventDefault: () => {},
+      } as React.KeyboardEvent;
+      filePicker.handleKeyDown(e);
+    },
+    [filePicker]
+  );
 
   return (
     <div className="shrink-0 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] p-4">
+      {/* Render ChipStack above the input area when chips exist, or show announcements */}
+      {(chips.length > 0 || chipAnnouncement) && onRemoveChip && onChipFocusChange && (
+        <ChipStack
+          chips={chips}
+          focusedIndex={chipFocusedIndex}
+          onRemove={handleRemoveChip}
+          onFocusChange={handleChipFocusChange}
+          announcement={chipAnnouncement}
+        />
+      )}
       <div className="flex items-end gap-2">
-        <div className="flex-1 relative">
+        <div ref={containerRef} className="flex-1 relative">
+          {/* File picker dropdown */}
+          <FilePicker
+            isOpen={filePicker.isOpen}
+            query={filePicker.query}
+            results={filePicker.results}
+            selectedIndex={filePicker.selectedIndex}
+            onSelect={filePicker.selectResult}
+            onClose={filePicker.close}
+            onNavigate={handleFilePickerNavigate}
+          />
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={e => onChange(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             placeholder="Message Goose..."
             disabled={disabled}
@@ -64,7 +242,7 @@ export function InputArea({
         {isGenerating ? (
           <StopButton onClick={onStop} />
         ) : (
-          <SendButton onClick={onSend} disabled={!canSend} />
+          <SendButton onClick={handleSend} disabled={!canSend} />
         )}
       </div>
       <p className="text-xs text-[var(--vscode-descriptionForeground)] mt-2">

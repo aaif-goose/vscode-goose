@@ -40,6 +40,10 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
   const messageQueue: AnyWebviewMessage[] = [];
   const messageCallbacks: MessageCallback[] = [];
 
+  // Track last known state to re-send on webview reconnect
+  let lastStatus: ProcessStatus | null = null;
+  let lastVersionStatus: VersionStatusPayload | null = null;
+
   const flushQueue = (): void => {
     if (!view || !isReady) return;
 
@@ -81,10 +85,12 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
   };
 
   const updateStatus = (status: ProcessStatus): void => {
+    lastStatus = status;
     postMessage(createStatusUpdateMessage(status));
   };
 
   const updateVersionStatus = (payload: VersionStatusPayload): void => {
+    lastVersionStatus = payload;
     postMessage(
       createVersionStatusMessage(payload.status, payload.minimumVersion, {
         detectedVersion: payload.detectedVersion,
@@ -94,6 +100,23 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
     );
   };
 
+  const resendState = (): void => {
+    // Re-send last known status when webview reconnects
+    if (lastVersionStatus) {
+      logger.debug('Re-sending version status to reconnected webview');
+      postMessage(
+        createVersionStatusMessage(lastVersionStatus.status, lastVersionStatus.minimumVersion, {
+          detectedVersion: lastVersionStatus.detectedVersion,
+          installUrl: lastVersionStatus.installUrl,
+          updateUrl: lastVersionStatus.updateUrl,
+        })
+      );
+    } else if (lastStatus) {
+      logger.debug('Re-sending process status to reconnected webview');
+      postMessage(createStatusUpdateMessage(lastStatus));
+    }
+  };
+
   const handleMessage = (message: unknown): void => {
     logger.debug('Received message from webview:', message);
 
@@ -101,6 +124,7 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
       logger.info('Webview ready signal received');
       isReady = true;
       flushQueue();
+      resendState();
       return;
     }
 

@@ -1,11 +1,12 @@
 interface ErrorMessageProps {
   content: string;
-  timestamp: Date;
+  timestamp?: Date;
   onRetry?: (content: string) => void;
   originalContent?: string;
 }
 
-function formatTime(date: Date): string {
+function formatTime(date?: Date): string {
+  if (!date) return 'Earlier';
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
@@ -32,7 +33,7 @@ export function ErrorMessage({ content, timestamp, onRetry, originalContent }: E
           </div>
         </div>
       </div>
-      <p className="text-xs text-[var(--vscode-descriptionForeground)] mt-1">
+      <p className={`text-xs text-[var(--vscode-descriptionForeground)] mt-1 ${!timestamp ? 'italic' : ''}`}>
         {formatTime(timestamp)}
       </p>
     </div>

@@ -128,7 +128,7 @@ export interface ChatMessage {
   readonly id: string;
   readonly role: MessageRole;
   readonly content: string;
-  readonly timestamp: Date;
+  readonly timestamp?: Date; // Optional - undefined for history messages loaded from server
   readonly status: MessageStatus;
   readonly originalContent?: string;
 }

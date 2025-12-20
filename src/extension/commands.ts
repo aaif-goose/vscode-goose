@@ -3,11 +3,15 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 import * as E from 'fp-ts/Either';
 import { Logger } from './logger';
 import { SubprocessManager } from './subprocessManager';
+import { WebviewProvider } from './webviewProvider';
 import { discoverBinary } from './binaryDiscovery';
 import { getBinaryDiscoveryConfig } from './config';
+import { ContextChip } from '../shared/contextTypes';
+import { createAddContextChipMessage, createFocusChatInputMessage } from '../shared/messages';
 
 /** Dependencies for command registration */
 export interface CommandDependencies {
@@ -59,4 +63,55 @@ export function registerCommands(
   );
 
   logger.debug('Commands registered: goose.showLogs, goose.restart');
+}
+
+/** Generate a unique chip ID */
+function generateChipId(): string {
+  return `chip-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/** Dependencies for context commands */
+export interface ContextCommandDependencies {
+  readonly logger: Logger;
+  readonly webviewProvider: WebviewProvider;
+}
+
+/** Register context-related commands (selection to chat) */
+export function registerContextCommands(
+  context: vscode.ExtensionContext,
+  deps: ContextCommandDependencies
+): void {
+  const { logger, webviewProvider } = deps;
+
+  context.subscriptions.push(
+    vscode.commands.registerTextEditorCommand(
+      'goose.sendSelectionToChat',
+      (editor: vscode.TextEditor) => {
+        const selection = editor.selection;
+        const document = editor.document;
+
+        const chip: ContextChip = {
+          id: generateChipId(),
+          filePath: document.uri.fsPath,
+          fileName: path.basename(document.uri.fsPath),
+          languageId: document.languageId,
+          range: selection.isEmpty
+            ? undefined
+            : {
+                startLine: selection.start.line + 1,
+                endLine: selection.end.line + 1,
+              },
+        };
+
+        webviewProvider.postMessage(createAddContextChipMessage(chip));
+        webviewProvider.postMessage(createFocusChatInputMessage());
+
+        logger.info(
+          `Added context chip: ${chip.fileName}${chip.range ? `:${chip.range.startLine}-${chip.range.endLine}` : ''}`
+        );
+      }
+    )
+  );
+
+  logger.debug('Context commands registered: goose.sendSelectionToChat');
 }

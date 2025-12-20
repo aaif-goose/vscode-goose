@@ -4,6 +4,7 @@
 
 import { ChatMessage, ProcessStatus } from './types';
 import { SessionEntry } from './sessionTypes';
+import { ContextChip, FileSearchResult } from './contextTypes';
 
 /** Types of messages that can be sent between webview and extension */
 export enum WebviewMessageType {
@@ -51,6 +52,16 @@ export enum WebviewMessageType {
   // Version Status Messages
   /** Extension sends version compatibility status to webview */
   VERSION_STATUS = 'VERSION_STATUS',
+
+  // Context Chip Messages
+  /** Extension adds a context chip to the input */
+  ADD_CONTEXT_CHIP = 'ADD_CONTEXT_CHIP',
+  /** Webview requests file search */
+  FILE_SEARCH = 'FILE_SEARCH',
+  /** Extension returns file search results */
+  SEARCH_RESULTS = 'SEARCH_RESULTS',
+  /** Extension requests focus on chat input */
+  FOCUS_CHAT_INPUT = 'FOCUS_CHAT_INPUT',
 }
 
 // ============================================================================
@@ -173,6 +184,26 @@ export interface VersionStatusPayload {
   readonly updateUrl?: string;
 }
 
+// Context Chip Payloads
+
+/** Payload for ADD_CONTEXT_CHIP message */
+export interface AddContextChipPayload {
+  readonly chip: ContextChip;
+}
+
+/** Payload for FILE_SEARCH message */
+export interface FileSearchPayload {
+  readonly query: string;
+}
+
+/** Payload for SEARCH_RESULTS message */
+export interface SearchResultsPayload {
+  readonly results: readonly FileSearchResult[];
+}
+
+/** Payload for FOCUS_CHAT_INPUT message (empty) */
+export type FocusChatInputPayload = Record<string, never>;
+
 // ============================================================================
 // Message Type Mapping
 // ============================================================================
@@ -201,6 +232,11 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.HISTORY_COMPLETE]: HistoryCompletePayload;
   // Version Status
   [WebviewMessageType.VERSION_STATUS]: VersionStatusPayload;
+  // Context Chips
+  [WebviewMessageType.ADD_CONTEXT_CHIP]: AddContextChipPayload;
+  [WebviewMessageType.FILE_SEARCH]: FileSearchPayload;
+  [WebviewMessageType.SEARCH_RESULTS]: SearchResultsPayload;
+  [WebviewMessageType.FOCUS_CHAT_INPUT]: FocusChatInputPayload;
 }
 
 /** Generic webview message with typed payload */
@@ -438,6 +474,46 @@ export function createVersionStatusMessage(
   };
 }
 
+// Context Chip Factory Functions
+
+/** Create an ADD_CONTEXT_CHIP message */
+export function createAddContextChipMessage(
+  chip: ContextChip
+): WebviewMessage<WebviewMessageType.ADD_CONTEXT_CHIP> {
+  return {
+    type: WebviewMessageType.ADD_CONTEXT_CHIP,
+    payload: { chip },
+  };
+}
+
+/** Create a FILE_SEARCH message */
+export function createFileSearchMessage(
+  query: string
+): WebviewMessage<WebviewMessageType.FILE_SEARCH> {
+  return {
+    type: WebviewMessageType.FILE_SEARCH,
+    payload: { query },
+  };
+}
+
+/** Create a SEARCH_RESULTS message */
+export function createSearchResultsMessage(
+  results: readonly FileSearchResult[]
+): WebviewMessage<WebviewMessageType.SEARCH_RESULTS> {
+  return {
+    type: WebviewMessageType.SEARCH_RESULTS,
+    payload: { results },
+  };
+}
+
+/** Create a FOCUS_CHAT_INPUT message */
+export function createFocusChatInputMessage(): WebviewMessage<WebviewMessageType.FOCUS_CHAT_INPUT> {
+  return {
+    type: WebviewMessageType.FOCUS_CHAT_INPUT,
+    payload: {},
+  };
+}
+
 // ============================================================================
 // Type Guards
 // ============================================================================
@@ -597,4 +673,34 @@ export function isVersionStatusMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.VERSION_STATUS> {
   return isWebviewMessage(message, WebviewMessageType.VERSION_STATUS);
+}
+
+// Context Chip Type Guards
+
+/** Check if message is ADD_CONTEXT_CHIP */
+export function isAddContextChipMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.ADD_CONTEXT_CHIP> {
+  return isWebviewMessage(message, WebviewMessageType.ADD_CONTEXT_CHIP);
+}
+
+/** Check if message is FILE_SEARCH */
+export function isFileSearchMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.FILE_SEARCH> {
+  return isWebviewMessage(message, WebviewMessageType.FILE_SEARCH);
+}
+
+/** Check if message is SEARCH_RESULTS */
+export function isSearchResultsMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SEARCH_RESULTS> {
+  return isWebviewMessage(message, WebviewMessageType.SEARCH_RESULTS);
+}
+
+/** Check if message is FOCUS_CHAT_INPUT */
+export function isFocusChatInputMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.FOCUS_CHAT_INPUT> {
+  return isWebviewMessage(message, WebviewMessageType.FOCUS_CHAT_INPUT);
 }

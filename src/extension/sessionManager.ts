@@ -142,7 +142,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
           id: generateId(),
           role: MessageRole.USER,
           content: content.text,
-          timestamp: new Date(),
+          timestamp: undefined, // History messages don't have reliable timestamps
           status: MessageStatus.COMPLETE,
         };
         historyMessageCallbacks.forEach(cb => cb(msg));
@@ -154,7 +154,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
           id: generateId(),
           role: MessageRole.ASSISTANT,
           content: content.text,
-          timestamp: new Date(),
+          timestamp: undefined, // History messages don't have reliable timestamps
           status: MessageStatus.COMPLETE,
         };
         historyMessageCallbacks.forEach(cb => cb(msg));

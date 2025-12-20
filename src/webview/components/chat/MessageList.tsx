@@ -24,7 +24,8 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
   const { scrollToBottom } = useAutoScroll(containerRef, {
     isStreaming: isGenerating,
   });
-  const prevMessageCountRef = useRef(messages.length);
+  const prevMessageCountRef = useRef(0);
+  const hasInitialScrolled = useRef(false);
 
   useImperativeHandle(
     ref,
@@ -39,9 +40,14 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
     []
   );
 
+  // Scroll to bottom when messages are added or on initial load
   useEffect(() => {
-    if (messages.length > prevMessageCountRef.current) {
-      scrollToBottom();
+    if (messages.length > 0) {
+      // Initial scroll or new messages added
+      if (!hasInitialScrolled.current || messages.length > prevMessageCountRef.current) {
+        scrollToBottom();
+        hasInitialScrolled.current = true;
+      }
     }
     prevMessageCountRef.current = messages.length;
   }, [messages.length, scrollToBottom]);

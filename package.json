@@ -68,8 +68,29 @@
       {
         "command": "goose.restart",
         "title": "Goose: Restart"
+      },
+      {
+        "command": "goose.sendSelectionToChat",
+        "title": "Send to Goose"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "goose.sendSelectionToChat",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "goose.sendSelectionToChat",
+          "when": "editorTextFocus",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "build": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify",

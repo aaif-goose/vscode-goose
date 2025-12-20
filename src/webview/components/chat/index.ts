@@ -9,3 +9,5 @@ export { InputArea } from './InputArea';
 export { SendButton } from './SendButton';
 export { StopButton } from './StopButton';
 export { ProgressIndicator } from './ProgressIndicator';
+export { ContextChip } from './ContextChip';
+export { ChipStack } from './ChipStack';

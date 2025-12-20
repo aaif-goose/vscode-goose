@@ -5,12 +5,13 @@ import { ProgressIndicator } from './ProgressIndicator';
 
 interface AssistantMessageProps {
   content: string;
-  timestamp: Date;
+  timestamp?: Date;
   status: MessageStatus;
   isStreaming: boolean;
 }
 
-function formatTime(date: Date): string {
+function formatTime(date?: Date): string {
+  if (!date) return 'Earlier';
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
@@ -38,7 +39,7 @@ export function AssistantMessage({
           )}
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <p className="text-xs text-[var(--vscode-descriptionForeground)]">
+          <p className={`text-xs text-[var(--vscode-descriptionForeground)] ${!timestamp ? 'italic' : ''}`}>
             {formatTime(timestamp)}
           </p>
           {status === MessageStatus.CANCELLED && (
