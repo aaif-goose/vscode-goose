@@ -22,6 +22,7 @@ export interface ContextChip {
 export interface FileSearchResult {
   readonly path: string;
   readonly fileName: string;
+  readonly relativePath: string;
   readonly languageId: string;
   readonly recentScore: number;
 }

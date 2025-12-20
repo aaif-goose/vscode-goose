@@ -90,12 +90,20 @@ export function createFileSearchService(logger: Logger): FileSearchService {
 
     const uris = await vscode.workspace.findFiles(pattern, exclude, maxResults);
 
-    let results: FileSearchResult[] = uris.map(uri => ({
-      path: uri.fsPath,
-      fileName: path.basename(uri.fsPath),
-      languageId: getLanguageId(uri.fsPath),
-      recentScore: recentFiles.get(uri.fsPath) ?? 0,
-    }));
+    let results: FileSearchResult[] = uris.map(uri => {
+      const fileName = path.basename(uri.fsPath);
+      const relativePath = vscode.workspace.asRelativePath(uri, false);
+      // Get directory part of relative path (exclude filename)
+      const relativeDir = path.dirname(relativePath);
+
+      return {
+        path: uri.fsPath,
+        fileName,
+        relativePath: relativeDir === '.' ? '' : relativeDir,
+        languageId: getLanguageId(uri.fsPath),
+        recentScore: recentFiles.get(uri.fsPath) ?? 0,
+      };
+    });
 
     // Filter case-insensitively if query is provided
     if (query) {

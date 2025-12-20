@@ -9,11 +9,9 @@ interface FilePickerItemProps {
 
 /**
  * Individual file result item in the @ file picker dropdown.
- * Displays language icon, filename, and relative path.
+ * Displays language icon, filename (prioritized), and relative path.
  */
 export function FilePickerItem({ result, isSelected, onSelect }: FilePickerItemProps) {
-  const relativePath = getRelativePath(result.path, result.fileName);
-
   return (
     <div
       role="option"
@@ -28,32 +26,12 @@ export function FilePickerItem({ result, isSelected, onSelect }: FilePickerItemP
       `}
     >
       <FileTypeIcon languageId={result.languageId} className="w-4 h-4 flex-shrink-0" />
-      <span className="truncate font-medium">{result.fileName}</span>
-      {relativePath && (
-        <span className="truncate text-[var(--vscode-descriptionForeground)] text-sm">
-          {relativePath}
+      <span className="flex-shrink-0 font-medium">{result.fileName}</span>
+      {result.relativePath && (
+        <span className="truncate text-[var(--vscode-descriptionForeground)] text-sm min-w-0">
+          {result.relativePath}
         </span>
       )}
     </div>
   );
-}
-
-
-/**
- * Extracts the relative path from a full file path, excluding the filename.
- * Returns the directory path or empty string if file is at root.
- */
-function getRelativePath(fullPath: string, fileName: string): string {
-  // Remove the filename from the path to get the directory
-  const pathWithoutFilename = fullPath.slice(0, fullPath.length - fileName.length);
-
-  // Clean up trailing slashes and return
-  const cleanPath = pathWithoutFilename.replace(/[/\\]+$/, '');
-
-  // If path is empty or just a drive letter, return empty
-  if (!cleanPath || /^[a-zA-Z]:?$/.test(cleanPath)) {
-    return '';
-  }
-
-  return cleanPath;
 }
