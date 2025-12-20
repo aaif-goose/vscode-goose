@@ -128,14 +128,17 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
   log.info('[Mock] Mock streaming handler registered');
 }
 
+/** ACP streaming content block types */
+type AcpStreamContentBlock =
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'resource_link'; readonly uri: string; readonly name: string; readonly mimeType?: string }
+  | { readonly type: 'resource'; readonly resource: { readonly uri: string; readonly text?: string; readonly blob?: string; readonly mimeType?: string } };
+
 interface AcpSessionUpdateParams {
   readonly sessionId: string;
   readonly update: {
     readonly sessionUpdate: string;
-    readonly content?: {
-      readonly type: string;
-      readonly text?: string;
-    };
+    readonly content?: AcpStreamContentBlock;
   };
 }
 
@@ -354,7 +357,7 @@ function setupAcpCommunication(
     if (method === 'session/update' && params?.update) {
       const { sessionUpdate, content } = params.update;
 
-      if (sessionUpdate === 'agent_message_chunk' && content?.text && currentResponseId) {
+      if (sessionUpdate === 'agent_message_chunk' && currentResponseId && content?.type === 'text') {
         provider.postMessage(createStreamTokenMessage(currentResponseId, content.text, false));
       }
     }

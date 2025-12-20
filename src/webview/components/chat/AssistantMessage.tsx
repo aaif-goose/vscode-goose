@@ -3,6 +3,8 @@ import { MessageStatus } from '../../../shared/types';
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
 import { CopyButton } from '../markdown/CopyButton';
 import { ProgressIndicator } from './ProgressIndicator';
+import { FileReferenceCard } from './FileReferenceCard';
+import { parseContent } from '../../../shared/fileReferenceParser';
 
 const MAX_LINES_COLLAPSED = 15;
 
@@ -39,10 +41,22 @@ export function AssistantMessage({
   const [isExpanded, setIsExpanded] = useState(false);
   const showIndicator = isStreaming && !content;
 
-  // Only truncate history messages (no timestamp) that aren't streaming
+  // Parse content to check if it's a file reference
+  // Only parse when not streaming to avoid partial matches
+  const parsedContent = !isStreaming ? parseContent(content) : { type: 'text' as const, content };
+  const isFileReference = parsedContent.type === 'file_reference';
+
+  // Only truncate history messages (no timestamp) that aren't streaming and aren't file references
   const isHistoryMessage = !timestamp;
   const { truncated, isTruncated, totalLines } = truncateContent(content, MAX_LINES_COLLAPSED);
-  const displayContent = isHistoryMessage && isTruncated && !isExpanded && !isStreaming ? truncated : content;
+  const displayContent = isHistoryMessage && isTruncated && !isExpanded && !isStreaming && !isFileReference
+    ? truncated
+    : content;
+
+  // Get copy text - for file references, use the file content if available
+  const copyText = isFileReference && parsedContent.type === 'file_reference'
+    ? parsedContent.reference.content || content
+    : content;
 
   return (
     <div className="flex flex-col items-start group">
@@ -50,6 +64,8 @@ export function AssistantMessage({
         <div className="relative">
           {showIndicator ? (
             <ProgressIndicator className="py-2" />
+          ) : isFileReference && parsedContent.type === 'file_reference' ? (
+            <FileReferenceCard reference={parsedContent.reference} />
           ) : (
             <>
               <MarkdownRenderer content={displayContent} isStreaming={isStreaming} />
@@ -66,7 +82,7 @@ export function AssistantMessage({
           )}
           {!isStreaming && content && (
             <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <CopyButton text={content} />
+              <CopyButton text={copyText} />
             </div>
           )}
         </div>

@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
 import { MessageContext } from '../../../shared/types';
+import { FileReferenceCard } from './FileReferenceCard';
+import { FileTypeIcon } from '../icons/FileTypeIcon';
+import { parseContent, getLanguageFromPath } from '../../../shared/fileReferenceParser';
 
 const MAX_LINES_COLLAPSED = 15;
 
@@ -39,10 +42,14 @@ export function UserMessage({ content, timestamp, context }: UserMessageProps) {
   const hasTextContent = content.trim().length > 0;
   const hasContext = context && context.length > 0;
 
-  // Only truncate history messages (no timestamp)
+  // Check if content is a file reference (from history)
+  const parsedContent = parseContent(content);
+  const isFileReference = parsedContent.type === 'file_reference';
+
+  // Only truncate history messages (no timestamp) that aren't file references
   const isHistoryMessage = !timestamp;
   const { truncated, isTruncated, totalLines } = truncateContent(content, MAX_LINES_COLLAPSED);
-  const displayContent = isHistoryMessage && isTruncated && !isExpanded ? truncated : content;
+  const displayContent = isHistoryMessage && isTruncated && !isExpanded && !isFileReference ? truncated : content;
 
   return (
     <div className="flex flex-col items-end">
@@ -56,17 +63,21 @@ export function UserMessage({ content, timestamp, context }: UserMessageProps) {
                 className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)]"
                 title={ctx.filePath}
               >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="opacity-70">
-                  <path d="M13.5 1H3.5L2 2.5v11l1.5 1.5h10l1.5-1.5v-11L13.5 1zM13 13H4V3h9v10z" />
-                </svg>
+                <FileTypeIcon
+                  languageId={getLanguageFromPath(ctx.filePath)}
+                  className="w-3 h-3 flex-shrink-0"
+                />
                 {formatContextLabel(ctx)}
               </span>
             ))}
           </div>
         )}
 
-        {/* Text content */}
-        {hasTextContent && (
+        {/* File reference content */}
+        {isFileReference && parsedContent.type === 'file_reference' ? (
+          <FileReferenceCard reference={parsedContent.reference} />
+        ) : hasTextContent ? (
+          /* Text content */
           <div className="bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-2xl px-4 py-2">
             <MarkdownRenderer content={displayContent} variant="bubble" />
             {isHistoryMessage && isTruncated && (
@@ -79,7 +90,7 @@ export function UserMessage({ content, timestamp, context }: UserMessageProps) {
               </button>
             )}
           </div>
-        )}
+        ) : null}
 
         <p className={`text-xs text-[var(--vscode-descriptionForeground)] mt-1 text-right ${!timestamp ? 'italic' : ''}`}>
           {formatTime(timestamp)}
