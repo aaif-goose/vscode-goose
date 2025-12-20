@@ -21,7 +21,7 @@ export function SessionHeader({
   const displayTitle = hasMessages ? (activeSession?.title ?? 'New Session') : 'New Session';
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)]">
+    <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] relative z-10">
       <span
         className="text-sm text-[var(--vscode-foreground)] truncate max-w-[160px]"
         title={displayTitle}

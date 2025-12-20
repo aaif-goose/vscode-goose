@@ -15,12 +15,22 @@
 }
 
 @layer base {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     font-family: var(--vscode-font-family);
     color: var(--vscode-foreground);
     background-color: var(--vscode-editor-background);
     margin: 0;
     padding: 0;
+  }
+
+  #root {
+    height: 100%;
   }
 
   .markdown-content {
