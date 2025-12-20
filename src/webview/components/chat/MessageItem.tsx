@@ -33,7 +33,7 @@ export function MessageItem({
         role="article"
         aria-label={`User message${timeLabel}`}
       >
-        <UserMessage content={message.content} timestamp={message.timestamp} />
+        <UserMessage content={message.content} timestamp={message.timestamp} context={message.context} />
       </div>
     );
   }

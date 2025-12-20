@@ -4,6 +4,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs/promises';
 import * as E from 'fp-ts/Either';
 import { createLogger, Logger } from './logger';
 import { getLogLevel, getBinaryDiscoveryConfig, onConfigChange, affectsSetting } from './config';
@@ -38,6 +39,7 @@ import {
   createHistoryCompleteMessage,
   createChatHistoryMessage,
   createSearchResultsMessage,
+  ContextChipData,
 } from '../shared/messages';
 import { JsonRpcClient } from './jsonRpcClient';
 import { createSessionStorage, SessionStorage } from './sessionStorage';
@@ -141,15 +143,168 @@ interface AcpPromptResponse {
   readonly stopReason: 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
 }
 
+interface AcpInitializeResponse {
+  readonly protocolVersion: number;
+  readonly agentCapabilities?: {
+    readonly loadSession?: boolean;
+    readonly promptCapabilities?: {
+      readonly audio?: boolean;
+      readonly image?: boolean;
+      readonly embeddedContext?: boolean;
+    };
+  };
+  readonly agentInfo?: {
+    readonly name?: string;
+    readonly version?: string;
+  };
+}
+
+/** ACP prompt content block types */
+type AcpContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'resource_link'; uri: string; name: string; mimeType?: string };
+
+/** Get MIME type from file path */
+function getMimeType(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+  const mimeTypes: Record<string, string> = {
+    ts: 'text/typescript',
+    tsx: 'text/typescript',
+    js: 'text/javascript',
+    jsx: 'text/javascript',
+    json: 'application/json',
+    md: 'text/markdown',
+    py: 'text/x-python',
+    rs: 'text/x-rust',
+    go: 'text/x-go',
+    java: 'text/x-java',
+    c: 'text/x-c',
+    cpp: 'text/x-c++',
+    h: 'text/x-c',
+    css: 'text/css',
+    html: 'text/html',
+    xml: 'text/xml',
+    yaml: 'text/yaml',
+    yml: 'text/yaml',
+    sh: 'text/x-shellscript',
+    sql: 'text/x-sql',
+  };
+  return mimeTypes[ext] ?? 'text/plain';
+}
+
+/** Read specific lines from a file */
+async function readFileLines(
+  filePath: string,
+  startLine: number,
+  endLine: number
+): Promise<string> {
+  const content = await fs.readFile(filePath, 'utf-8');
+  const lines = content.split('\n');
+  // Lines are 1-indexed in UI, convert to 0-indexed
+  const start = Math.max(0, startLine - 1);
+  const end = Math.min(lines.length, endLine);
+  return lines.slice(start, end).join('\n');
+}
+
+/** Build prompt content blocks from message and context chips */
+async function buildPromptBlocks(
+  content: string,
+  chips: readonly ContextChipData[] | undefined,
+  log: Logger
+): Promise<AcpContentBlock[]> {
+  const blocks: AcpContentBlock[] = [];
+
+  if (chips && chips.length > 0) {
+    for (const chip of chips) {
+      const fileName = chip.filePath.split('/').pop() ?? chip.filePath;
+
+      if (chip.range) {
+        // Line range selection: read and send the specific lines as text
+        try {
+          const selectedContent = await readFileLines(
+            chip.filePath,
+            chip.range.startLine,
+            chip.range.endLine
+          );
+          const header = `${chip.filePath}:${chip.range.startLine}-${chip.range.endLine}`;
+          blocks.push({
+            type: 'text',
+            text: `File: ${header}\n\`\`\`\n${selectedContent}\n\`\`\``,
+          });
+          log.debug(`Added selected content from ${header}`);
+        } catch (err) {
+          log.warn(`Failed to read lines from ${chip.filePath}:`, err);
+        }
+      } else {
+        // Whole file: use resource_link (Goose reads it)
+        blocks.push({
+          type: 'resource_link',
+          uri: `file://${chip.filePath}`,
+          name: fileName,
+          mimeType: getMimeType(chip.filePath),
+        });
+        log.debug(`Added resource link: file://${chip.filePath}`);
+      }
+    }
+  }
+
+  // Add user message text
+  if (content) {
+    blocks.push({ type: 'text', text: content });
+  }
+
+  return blocks;
+}
+
 async function initializeAcpSession(
   client: JsonRpcClient,
   workingDirectory: string,
   manager: SessionManager,
   log: Logger
 ): Promise<SessionEntry | null> {
-  log.info('Initializing ACP session...');
+  log.info('Initializing ACP connection...');
 
-  manager.initialize(client, DEFAULT_CAPABILITIES, workingDirectory);
+  // Call ACP initialize to get agent capabilities
+  const initResult = await client.request<AcpInitializeResponse>('initialize', {
+    protocolVersion: 1,
+    clientInfo: {
+      name: 'vscode-goose',
+      version: '0.1.0',
+    },
+    clientCapabilities: {
+      fs: { readTextFile: false, writeTextFile: false },
+      terminal: false,
+    },
+  })();
+
+  let capabilities = DEFAULT_CAPABILITIES;
+
+  if (E.isRight(initResult)) {
+    const response = initResult.right;
+    log.info(`ACP initialized with protocol version: ${response.protocolVersion}`);
+
+    if (response.agentInfo) {
+      log.info(`Agent: ${response.agentInfo.name} v${response.agentInfo.version}`);
+    }
+
+    // Parse capabilities from response
+    const agentCaps = response.agentCapabilities;
+    if (agentCaps) {
+      capabilities = {
+        loadSession: agentCaps.loadSession ?? DEFAULT_CAPABILITIES.loadSession,
+        promptCapabilities: {
+          image: agentCaps.promptCapabilities?.image ?? false,
+          audio: agentCaps.promptCapabilities?.audio ?? false,
+          embeddedContext: agentCaps.promptCapabilities?.embeddedContext ?? false,
+        },
+      };
+      log.info(`Agent capabilities: loadSession=${capabilities.loadSession}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`);
+    }
+  } else {
+    log.warn('ACP initialize failed, using default capabilities:', initResult.left);
+  }
+
+  manager.initialize(client, capabilities, workingDirectory);
 
   const existingSession = manager.getActiveSession();
   if (existingSession) {
@@ -215,7 +370,7 @@ function setupAcpCommunication(
 
   provider.onMessage(message => {
     if (isSendMessageMessage(message)) {
-      const { content, responseId } = message.payload;
+      const { content, responseId, contextChips } = message.payload;
       currentResponseId = responseId;
       const activeSessionId = getActiveSessionId();
 
@@ -228,6 +383,9 @@ function setupAcpCommunication(
       }
 
       log.info(`Sending message to ACP: ${content.substring(0, 50)}...`);
+      if (contextChips && contextChips.length > 0) {
+        log.info(`With ${contextChips.length} context chip(s)`);
+      }
 
       const activeSession = manager.getActiveSession();
       if (activeSession && activeSession.title === 'New Session') {
@@ -235,14 +393,12 @@ function setupAcpCommunication(
       }
 
       const sendRequest = async (): Promise<void> => {
+        // Build prompt content blocks with resource links for context
+        const promptBlocks = await buildPromptBlocks(content, contextChips, log);
+
         const result = await client.request<AcpPromptResponse>('session/prompt', {
           sessionId: activeSessionId,
-          prompt: [
-            {
-              type: 'text',
-              text: content,
-            },
-          ],
+          prompt: promptBlocks,
         })();
 
         if (E.isLeft(result)) {

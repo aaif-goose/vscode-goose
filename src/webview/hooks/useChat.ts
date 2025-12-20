@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { onMessage, postMessage, getState, setState } from '../bridge';
-import { ChatMessage, MessageRole, MessageStatus } from '../../shared/types';
+import { ChatMessage, MessageRole, MessageStatus, MessageContext } from '../../shared/types';
 import {
   createSendMessageMessage,
   createStopGenerationMessage,
@@ -10,7 +10,9 @@ import {
   isChatHistoryMessage,
   isHistoryMessage,
   isSessionCreatedMessage,
+  ContextChipData,
 } from '../../shared/messages';
+import type { ContextChip } from '../../shared/contextTypes';
 
 interface ChatState {
   messages: ChatMessage[];
@@ -166,7 +168,7 @@ export interface UseChatReturn {
   isGenerating: boolean;
   inputValue: string;
   setInputValue: (value: string) => void;
-  sendMessage: () => void;
+  sendMessage: (chips?: readonly ContextChip[]) => void;
   stopGeneration: () => void;
   focusedIndex: number | null;
   setFocusedIndex: (index: number | null) => void;
@@ -229,25 +231,39 @@ export function useChat(): UseChatReturn {
     dispatch({ type: 'SET_INPUT', payload: value });
   }, []);
 
-  const sendMessage = useCallback(() => {
+  const sendMessage = useCallback((chips?: readonly ContextChip[]) => {
     const content = inputValueRef.current.trim();
-    if (!content) return;
+    if (!content && (!chips || chips.length === 0)) return;
 
     const userMessageId = generateId();
     const responseId = generateId();
 
+    // Convert chips to context for display in message
+    const context: MessageContext[] | undefined = chips?.map(chip => ({
+      filePath: chip.filePath,
+      fileName: chip.fileName,
+      range: chip.range,
+    }));
+
     const userMessage: ChatMessage = {
       id: userMessageId,
       role: MessageRole.USER,
-      content,
+      content: content || '(context only)',
       timestamp: new Date(),
       status: MessageStatus.COMPLETE,
+      context: context && context.length > 0 ? context : undefined,
     };
 
     dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
     dispatch({ type: 'START_GENERATION', payload: { responseId } });
 
-    postMessage(createSendMessageMessage(content, userMessageId, responseId));
+    // Convert ContextChip to ContextChipData (only what extension needs)
+    const chipData: ContextChipData[] | undefined = chips?.map(chip => ({
+      filePath: chip.filePath,
+      range: chip.range,
+    }));
+
+    postMessage(createSendMessageMessage(content, userMessageId, responseId, chipData));
   }, []);
 
   const stopGeneration = useCallback(() => {

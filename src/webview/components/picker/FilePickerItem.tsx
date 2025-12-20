@@ -1,4 +1,5 @@
 import type { FileSearchResult } from '../../../shared/contextTypes';
+import { FileTypeIcon } from '../icons/FileTypeIcon';
 
 interface FilePickerItemProps {
   result: FileSearchResult;
@@ -26,7 +27,7 @@ export function FilePickerItem({ result, isSelected, onSelect }: FilePickerItemP
         transition-colors
       `}
     >
-      <LanguageIcon languageId={result.languageId} />
+      <FileTypeIcon languageId={result.languageId} className="w-4 h-4 flex-shrink-0" />
       <span className="truncate font-medium">{result.fileName}</span>
       {relativePath && (
         <span className="truncate text-[var(--vscode-descriptionForeground)] text-sm">
@@ -37,48 +38,6 @@ export function FilePickerItem({ result, isSelected, onSelect }: FilePickerItemP
   );
 }
 
-interface LanguageIconProps {
-  languageId: string;
-}
-
-function LanguageIcon({ languageId }: LanguageIconProps) {
-  const iconClass = getLanguageIconClass(languageId);
-  return (
-    <span
-      className={`codicon ${iconClass} text-[var(--vscode-icon-foreground)] flex-shrink-0`}
-      aria-hidden="true"
-    />
-  );
-}
-
-function getLanguageIconClass(languageId: string): string {
-  const languageIconMap: Record<string, string> = {
-    typescript: 'codicon-symbol-class',
-    typescriptreact: 'codicon-symbol-class',
-    javascript: 'codicon-symbol-method',
-    javascriptreact: 'codicon-symbol-method',
-    python: 'codicon-symbol-namespace',
-    rust: 'codicon-symbol-struct',
-    go: 'codicon-symbol-interface',
-    java: 'codicon-symbol-class',
-    csharp: 'codicon-symbol-class',
-    cpp: 'codicon-symbol-struct',
-    c: 'codicon-symbol-struct',
-    html: 'codicon-symbol-misc',
-    css: 'codicon-symbol-color',
-    scss: 'codicon-symbol-color',
-    json: 'codicon-json',
-    markdown: 'codicon-markdown',
-    yaml: 'codicon-symbol-key',
-    xml: 'codicon-symbol-misc',
-    sql: 'codicon-database',
-    shell: 'codicon-terminal',
-    bash: 'codicon-terminal',
-    powershell: 'codicon-terminal-powershell',
-  };
-
-  return languageIconMap[languageId] ?? 'codicon-file';
-}
 
 /**
  * Extracts the relative path from a full file path, excluding the filename.

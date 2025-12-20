@@ -32,7 +32,6 @@ export function ChatView({ className = '', chat, contextChips }: ChatViewProps) 
     clearChips,
     focusedIndex: chipFocusedIndex,
     setFocusedIndex: setChipFocusedIndex,
-    getContextPrefix,
     hasDuplicate,
     announcement: chipAnnouncement,
   } = contextChips;
@@ -98,7 +97,6 @@ export function ChatView({ className = '', chat, contextChips }: ChatViewProps) 
         onRemoveChip={removeChip}
         chipFocusedIndex={chipFocusedIndex}
         onChipFocusChange={setChipFocusedIndex}
-        getContextPrefix={getContextPrefix}
         onClearChips={clearChips}
         onAddFileChip={handleAddFileChip}
         chipAnnouncement={chipAnnouncement}

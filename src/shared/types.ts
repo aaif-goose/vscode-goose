@@ -123,6 +123,17 @@ export enum MessageStatus {
   ERROR = 'error',
 }
 
+/** Attached context reference in a message (used for both input and history) */
+export interface MessageContext {
+  readonly filePath: string;
+  readonly fileName: string;
+  readonly range?: {
+    readonly startLine: number;
+    readonly endLine: number;
+  };
+  readonly content?: string; // File content (present in history, absent in live messages)
+}
+
 /** Chat message structure */
 export interface ChatMessage {
   readonly id: string;
@@ -131,6 +142,7 @@ export interface ChatMessage {
   readonly timestamp?: Date; // Optional - undefined for history messages loaded from server
   readonly status: MessageStatus;
   readonly originalContent?: string;
+  readonly context?: readonly MessageContext[]; // Attached file/resource references
 }
 
 /** Chat UI state */

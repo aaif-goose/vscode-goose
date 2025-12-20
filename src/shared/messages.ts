@@ -97,6 +97,16 @@ export interface SendMessagePayload {
   readonly content: string;
   readonly messageId: string;
   readonly responseId: string;
+  readonly contextChips?: readonly ContextChipData[];
+}
+
+/** Context chip data sent with messages (subset of ContextChip for extension) */
+export interface ContextChipData {
+  readonly filePath: string;
+  readonly range?: {
+    readonly startLine: number;
+    readonly endLine: number;
+  };
 }
 
 /** Payload for STREAM_TOKEN message */
@@ -299,11 +309,17 @@ export function createErrorMessage(
 export function createSendMessageMessage(
   content: string,
   messageId: string,
-  responseId: string
+  responseId: string,
+  contextChips?: readonly ContextChipData[]
 ): WebviewMessage<WebviewMessageType.SEND_MESSAGE> {
   return {
     type: WebviewMessageType.SEND_MESSAGE,
-    payload: { content, messageId, responseId },
+    payload: {
+      content,
+      messageId,
+      responseId,
+      ...(contextChips && contextChips.length > 0 && { contextChips }),
+    },
   };
 }
 

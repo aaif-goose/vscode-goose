@@ -11,7 +11,7 @@ import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes
 interface InputAreaProps {
   value: string;
   onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (chips?: readonly ContextChip[]) => void;
   onStop: () => void;
   isGenerating: boolean;
   disabled: boolean;
@@ -19,7 +19,6 @@ interface InputAreaProps {
   onRemoveChip?: (chipId: string) => void;
   chipFocusedIndex?: number | null;
   onChipFocusChange?: (index: number | null) => void;
-  getContextPrefix?: () => string;
   onClearChips?: () => void;
   onAddFileChip?: (result: FileSearchResult) => void;
   chipAnnouncement?: string | null;
@@ -39,7 +38,6 @@ export function InputArea({
   onRemoveChip,
   chipFocusedIndex = null,
   onChipFocusChange,
-  getContextPrefix,
   onClearChips,
   onAddFileChip,
   chipAnnouncement = null,
@@ -89,33 +87,15 @@ export function InputArea({
     if (disabled || isGenerating) return;
 
     const userInput = value.trim();
-    const contextPrefix = getContextPrefix?.() ?? '';
-    const fullMessage = contextPrefix + userInput;
+    const hasChips = chips.length > 0;
 
-    if (!fullMessage.trim()) return;
+    if (!userInput && !hasChips) return;
 
-    // If we have context but no user input, still allow sending
-    // If we have user input (with or without context), prepend context
-    if (contextPrefix && userInput) {
-      // Set the full message with context prefix
-      onChange(fullMessage);
-      // Use setTimeout to ensure state updates before send
-      setTimeout(() => {
-        onSend();
-        onClearChips?.();
-      }, 0);
-    } else if (contextPrefix && !userInput) {
-      // Only context, no user message - send just context
-      onChange(contextPrefix.trim());
-      setTimeout(() => {
-        onSend();
-        onClearChips?.();
-      }, 0);
-    } else {
-      // No context, just user input
-      onSend();
-    }
-  }, [value, disabled, isGenerating, getContextPrefix, onChange, onSend, onClearChips]);
+    // Pass chips to onSend - extension will handle formatting
+    onSend(hasChips ? chips : undefined);
+    onChange('');
+    onClearChips?.();
+  }, [value, disabled, isGenerating, chips, onChange, onSend, onClearChips]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Pass keyboard events to file picker first

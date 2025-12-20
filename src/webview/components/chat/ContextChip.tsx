@@ -1,4 +1,5 @@
 import type { ContextChip as ContextChipType } from '../../../shared/contextTypes';
+import { FileTypeIcon } from '../icons/FileTypeIcon';
 
 interface ContextChipProps {
   chip: ContextChipType;
@@ -45,7 +46,7 @@ export function ContextChip({ chip, isFocused, onRemove, onFocus }: ContextChipP
         ${isFocused ? 'ring-2 ring-[var(--vscode-focusBorder)]' : ''}
       `}
     >
-      <LanguageIcon languageId={chip.languageId} />
+      <FileTypeIcon languageId={chip.languageId} className="w-4 h-4 flex-shrink-0" />
       <span className="max-w-[150px] truncate">{displayText}</span>
       <button
         type="button"
@@ -66,48 +67,6 @@ export function ContextChip({ chip, isFocused, onRemove, onFocus }: ContextChipP
   );
 }
 
-interface LanguageIconProps {
-  languageId: string;
-}
-
-function LanguageIcon({ languageId }: LanguageIconProps) {
-  const iconClass = getLanguageIconClass(languageId);
-  return (
-    <span
-      className={`codicon ${iconClass} text-[var(--vscode-icon-foreground)]`}
-      aria-hidden="true"
-    />
-  );
-}
-
-function getLanguageIconClass(languageId: string): string {
-  const languageIconMap: Record<string, string> = {
-    typescript: 'codicon-symbol-class',
-    typescriptreact: 'codicon-symbol-class',
-    javascript: 'codicon-symbol-method',
-    javascriptreact: 'codicon-symbol-method',
-    python: 'codicon-symbol-namespace',
-    rust: 'codicon-symbol-struct',
-    go: 'codicon-symbol-interface',
-    java: 'codicon-symbol-class',
-    csharp: 'codicon-symbol-class',
-    cpp: 'codicon-symbol-struct',
-    c: 'codicon-symbol-struct',
-    html: 'codicon-symbol-misc',
-    css: 'codicon-symbol-color',
-    scss: 'codicon-symbol-color',
-    json: 'codicon-json',
-    markdown: 'codicon-markdown',
-    yaml: 'codicon-symbol-key',
-    xml: 'codicon-symbol-misc',
-    sql: 'codicon-database',
-    shell: 'codicon-terminal',
-    bash: 'codicon-terminal',
-    powershell: 'codicon-terminal-powershell',
-  };
-
-  return languageIconMap[languageId] ?? 'codicon-file';
-}
 
 interface CloseIconProps {
   className?: string;
