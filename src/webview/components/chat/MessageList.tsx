@@ -2,6 +2,7 @@ import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { ChatMessage, MessageStatus } from '../../../shared/types';
 import { MessageItem } from './MessageItem';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
+import { GooseWatermark } from '../icons/GooseWatermark';
 
 interface MessageListProps {
   messages: readonly ChatMessage[];
@@ -56,11 +57,9 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
     return (
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto flex items-center justify-center p-4"
+        className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center p-4"
       >
-        <p className="text-[var(--vscode-descriptionForeground)] text-center">
-          Start a conversation with Goose
-        </p>
+        <GooseWatermark />
       </div>
     );
   }
@@ -68,7 +67,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto p-4"
+      className="flex-1 min-h-0 overflow-y-auto p-4"
       role="log"
       aria-live="polite"
       aria-label="Chat messages"

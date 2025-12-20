@@ -8,7 +8,7 @@ export function SendButton({ onClick, disabled }: SendButtonProps) {
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1.5 px-3 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-lg hover:bg-[var(--vscode-button-hoverBackground)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      className="flex items-center gap-1.5 px-3 h-[38px] bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-xl hover:bg-[var(--vscode-button-hoverBackground)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       aria-label="Send message"
     >
       <SendIcon className="w-4 h-4" />
@@ -26,11 +26,12 @@ function SendIcon({ className }: { className?: string }) {
       viewBox="0 0 24 24"
       xmlns="http://www.w3.org/2000/svg"
     >
+      {/* Slanted paper plane / send arrow */}
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
-        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+        d="M5 12l14-7-7 14v-7H5z"
       />
     </svg>
   );

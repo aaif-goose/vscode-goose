@@ -26,6 +26,7 @@ interface InputAreaProps {
 
 const MAX_HEIGHT = 200;
 const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
+const PLACEHOLDER = `Message Goose... (${isMac ? '⌘' : 'Ctrl'}+↑/↓ to navigate)`;
 
 export function InputArea({
   value,
@@ -194,7 +195,7 @@ export function InputArea({
           announcement={chipAnnouncement}
         />
       )}
-      <div className="flex items-end gap-2">
+      <div className="flex items-start gap-2">
         <div ref={containerRef} className="flex-1 relative">
           {/* File picker dropdown */}
           <FilePicker
@@ -211,7 +212,7 @@ export function InputArea({
             value={value}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="Message Goose..."
+            placeholder={PLACEHOLDER}
             disabled={disabled}
             rows={1}
             className="w-full resize-none bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-lg px-3 py-2 focus:outline-none focus:border-[var(--vscode-focusBorder)] placeholder:text-[var(--vscode-input-placeholderForeground)]"
@@ -225,9 +226,6 @@ export function InputArea({
           <SendButton onClick={handleSend} disabled={!canSend} />
         )}
       </div>
-      <p className="text-xs text-[var(--vscode-descriptionForeground)] mt-2">
-        {isMac ? '⌘' : 'Ctrl'}+↑/↓ to navigate messages
-      </p>
     </div>
   );
 }

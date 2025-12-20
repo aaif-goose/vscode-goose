@@ -6,7 +6,7 @@ export function StopButton({ onClick }: StopButtonProps) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 px-3 py-2 bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] rounded-lg hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+      className="flex items-center gap-1.5 px-3 h-[38px] bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] rounded-xl hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
       aria-label="Stop generation"
     >
       <StopIcon className="w-4 h-4" />

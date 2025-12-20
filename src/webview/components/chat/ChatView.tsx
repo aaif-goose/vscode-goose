@@ -74,7 +74,7 @@ export function ChatView({ className = '', chat, contextChips }: ChatViewProps) 
 
   return (
     <div
-      className={`flex flex-col h-full ${className}`}
+      className={`flex flex-col min-h-0 ${className}`}
       aria-busy={isGenerating}
       aria-label="Chat with Goose"
     >
