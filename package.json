@@ -2,7 +2,7 @@
   "name": "vscode-goose",
   "displayName": "VS Code Goose",
   "description": "codename Goose for VSCode",
-  "version": "0.1.22",
+  "version": "0.2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/block/vscode-goose"
@@ -13,8 +13,12 @@
   "engines": {
     "vscode": "^1.95.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -45,7 +49,12 @@
         },
         "goose.logLevel": {
           "type": "string",
-          "enum": ["error", "warn", "info", "debug"],
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
           "default": "info",
           "description": "Logging level for the Goose extension."
         }

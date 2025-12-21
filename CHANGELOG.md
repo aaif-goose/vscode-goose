@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/block/vscode-goose/compare/v0.1.22...v0.2.0) (2025-12-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* rewrite all internals to use use acp ([#28](https://github.com/block/vscode-goose/issues/28))
+
+### Features
+
+* rewrite all internals to use use acp ([#28](https://github.com/block/vscode-goose/issues/28)) ([5985adb](https://github.com/block/vscode-goose/commit/5985adb2397eff70033f2bec05ec28bd17ad136e))
+
 ## [0.1.22](https://github.com/block/vscode-goose/compare/v0.1.21...v0.1.22) (2025-08-18)
 
 
