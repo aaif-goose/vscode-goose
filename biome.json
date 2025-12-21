@@ -21,7 +21,8 @@
       "!**/.vscode-test/",
       "!**/*.vsix",
       "!**/package-lock.json",
-      "!**/bun.lockb"
+      "!**/bun.lockb",
+      "!package.json"
     ]
   },
   "linter": {

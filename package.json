@@ -97,7 +97,7 @@
     "check": "bunx --bun biome check",
     "check:fix": "bunx --bun biome check --write",
     "ci": "bunx --bun biome ci",
-    "package": "bun build ./src/extension/extension.ts --outdir=./dist --target=node --format=cjs --external=vscode --sourcemap=linked && bun build ./src/webview/index.tsx --outdir=./dist/webview --entry-naming=main.[ext] --minify && tailwindcss -i ./src/webview/styles.css -o ./dist/webview/styles.css --minify && vsce package",
+    "package": "bun run build && vsce package --no-dependencies",
     "clean": "rm -rf dist",
     "prepare": "husky"
   },
