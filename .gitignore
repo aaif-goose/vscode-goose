@@ -45,3 +45,9 @@ eslint-report.*
 
 # Bun lockfile (if using bun)
 bun.lockb
+
+# https://rp1.run knowledge files
+!.rp1/
+.rp1/*
+!.rp1/context/
+!.rp1/context/**
