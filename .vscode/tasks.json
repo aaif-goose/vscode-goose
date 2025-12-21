@@ -1,20 +1,31 @@
-// See https://go.microsoft.com/fwlink/?LinkId=733558
-// for the documentation about the tasks.json format
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$tsc-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never"
-			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "shell",
+      "command": "bun run build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "label": "bun: build",
+      "detail": "Build extension and webview"
+    },
+    {
+      "type": "shell",
+      "command": "bun run dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "label": "bun: dev",
+      "detail": "Watch mode for extension development"
+    },
+    {
+      "type": "shell",
+      "command": "bun run lint",
+      "problemMatcher": ["$eslint-stylish"],
+      "label": "bun: lint",
+      "detail": "Run ESLint"
+    }
+  ]
 }

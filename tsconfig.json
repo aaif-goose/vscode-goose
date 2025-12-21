@@ -1,28 +1,26 @@
 {
-	"compilerOptions": {
-		"module": "Node16",
-		"target": "es2022",
-		"outDir": "out",
-		"lib": [
-			"es2022",
-			"DOM"
-		],
-		"sourceMap": true,
-		"rootDir": "src",
-		"strict": true,
-		"noImplicitReturns": true,
-		"noFallthroughCasesInSwitch": true,
-		"noUnusedParameters": true,
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"baseUrl": "."
-	},
-	"include": [
-		"src"
-	],
-	"exclude": [
-		"node_modules",
-		"webview-ui",
-		".vscode-test"
-	]
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "baseUrl": "."
+  },
+  "include": ["src/extension/**/*", "src/shared/**/*"],
+  "exclude": ["node_modules", "dist", "src/webview", ".vscode-test"]
 }

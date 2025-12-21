@@ -12,33 +12,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        # Checks out the code from the PR branch
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'npm'
+          bun-version: latest
 
       - name: Install Dependencies
-        run: |
-          npm ci --no-fund --no-audit
-          npm ci --no-fund --no-audit --prefix webview-ui
+        run: bun install --frozen-lockfile
 
-      - name: Lint
-        run: |
-          npm run lint
+      - name: Lint & Format Check
+        run: bun run ci
 
-      - name: Install Xvfb
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
+      - name: Run Tests
+        run: bun test
 
-      - name: Run Tests with Xvfb
-        run: |
-          # Run standard tests and the package activation test
-          xvfb-run -a sh -c "npm run test:all && npm run test:package"
-
-      - name: Compile extension and webview
-        run: npm run compile # This includes build:webview
+      - name: Build
+        run: bun run build

@@ -1,0 +1,21 @@
+{
+  "strategy": "parallel-map-reduce",
+  "repo_type": "single-project",
+  "current_project_path": ".",
+  "monorepo_projects": [],
+  "generated_at": "2025-12-21T00:00:00.000Z",
+  "git_commit": "d95458d99cfb3ee2201274631da5f7197e94367f",
+  "files_analyzed": 69,
+  "languages": ["TypeScript", "TSX", "CSS"],
+  "frameworks": ["React 19", "VS Code Extension API", "Tailwind CSS 4", "fp-ts", "react-markdown"],
+  "metrics": {
+    "modules": 7,
+    "components": 42,
+    "concepts": 24
+  },
+  "incremental_update": {
+    "previous_commit": "3c653b9ef95f46e299372a514aa60e0e40b1ad27",
+    "files_changed": 76,
+    "mode": "FULL"
+  }
+}
