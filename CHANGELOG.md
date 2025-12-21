@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/block/vscode-goose/compare/v0.2.0...v0.2.1) (2025-12-21)
+
+
+### Bug Fixes
+
+* ensure release is updated with new structure ([#30](https://github.com/block/vscode-goose/issues/30)) ([7fe9652](https://github.com/block/vscode-goose/commit/7fe9652def7101ce5532f3cdc19a044914f8e4e1))
+
 ## [0.2.0](https://github.com/block/vscode-goose/compare/v0.1.22...v0.2.0) (2025-12-21)
 
 
