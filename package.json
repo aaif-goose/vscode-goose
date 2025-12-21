@@ -13,12 +13,8 @@
   "engines": {
     "vscode": "^1.95.0"
   },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -49,12 +45,7 @@
         },
         "goose.logLevel": {
           "type": "string",
-          "enum": [
-            "error",
-            "warn",
-            "info",
-            "debug"
-          ],
+          "enum": ["error", "warn", "info", "debug"],
           "default": "info",
           "description": "Logging level for the Goose extension."
         }
