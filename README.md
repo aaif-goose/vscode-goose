@@ -2,22 +2,26 @@
 
 Bring [Goose](https://block.github.io/goose/)—the open-source, on-device AI agent—directly into your editor. Chat with Goose, reference your code, and let it handle full-stack engineering tasks without ever leaving VS Code.
 
-![Screenshot](./resources/screenshot.png)
+![Screenshot](./resources/screenshot.gif)
 
 > **Note:** This extension is under active development. Some features may change as we continue to improve the experience. We appreciate your feedback!
 
 ## Features
 
 ### Chat with Context
+
 Ask Goose questions about your code with full file context. Select code in your editor and send it to Goose with a single keystroke, or type `@` to search and attach any file from your workspace.
 
 ### Context Chips
+
 Attach multiple files or code selections to your messages. Visual chips show exactly what context Goose sees, with support for both entire files and specific line ranges.
 
 ### Session Management
+
 Pick up where you left off. Your conversations persist across VS Code sessions with full history—browse past chats organized by time and switch between sessions instantly.
 
 ### Streaming Responses
+
 See Goose think in real-time. Responses stream token-by-token with syntax-highlighted code blocks and one-click copy.
 
 ## Requirements
@@ -75,6 +79,7 @@ Type `@` in the chat input to search your workspace. Select a file to add it as 
 | `goose.logLevel` | Logging level: `error`, `warn`, `info`, `debug` |
 
 Goose reads its provider and model configuration from:
+
 - **macOS/Linux**: `~/.config/goose/config.yaml`
 - **Windows**: `%APPDATA%\Block\goose\config\config.yaml`
 
