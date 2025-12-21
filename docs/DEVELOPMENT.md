@@ -1,27 +1,63 @@
-# Goose VSCode Extension Development
+# Goose VS Code Extension Development
 
-This document provides information for developers working on the Goose VSCode extension.
+This document provides information for developers working on the Goose VS Code extension.
 For user documentation, see the main [README.md](../README.md).
 For architectural details, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-## Dev Set up
+## Dev Setup
 
 1. Clone the repository
-2. Navigate to the project root directory
-3. Install dependencies: `npm install` (this installs devDependencies like `rimraf` used by build and test scripts)
-4. Install webview dependencies: `cd webview-ui && npm install && cd ..`
-5. Build the extension and webview: `npm run compile`
-6. Open the project root in VSCode: `code .`
-7. Press F5 to start debugging (this will usually run the `compile` script automatically based on `.vscode/launch.json` preLaunchTask).
+2. Install [Bun](https://bun.sh/) if not already installed
+3. Navigate to the project root directory
+4. Install dependencies: `bun install`
+5. Build the extension: `bun run build`
+6. Open the project in VS Code: `code .`
+7. Press F5 to start debugging
+
+## Project Structure
+
+```
+src/
+├── extension/          # VS Code extension host (Node.js)
+│   ├── extension.ts    # Main entry point
+│   ├── subprocessManager.ts
+│   ├── jsonRpcClient.ts
+│   ├── sessionManager.ts
+│   ├── webviewProvider.ts
+│   └── ...
+├── webview/            # React chat UI (sandboxed iframe)
+│   ├── App.tsx
+│   ├── bridge.ts
+│   ├── hooks/
+│   └── components/
+└── shared/             # Shared types between extension/webview
+    ├── messages.ts
+    ├── types.ts
+    └── errors.ts
+```
 
 ## Build Process
 
-The extension uses a multi-step build process defined in `package.json` scripts:
+The extension uses Bun for building. All scripts are defined in `package.json`:
 
-1.  **`npm run build:extension`**: Uses `esbuild` to bundle the main extension code (`src/extension.ts` and its direct/indirect imports) into a single file (`out/extension.js`) with a sourcemap. This significantly reduces the package size and improves load times. The `vscode` module is marked as external as it's provided by the VS Code runtime. Dependencies listed in `devDependencies` (like `yaml`) should be correctly bundled.
-2.  **`npm run compile:tests`**: Uses the TypeScript compiler (`tsc`) based on the specific `tsconfig.tests.json` configuration. This compiles *only* the test files (`src/test/**/*.ts`) into JavaScript files within the `out/test/` directory, preserving the test file structure. This ensures test files are compiled separately from the main extension bundle and placed where the test runner expects them.
-3.  **`npm run build:webview`**: Navigates to the `webview-ui/` directory and runs its build process (using Vite) to create the optimized chat interface assets in `webview-ui/dist/`. (Note: `webview-ui` dependencies should be installed separately as part of the initial dev setup or by CI).
-4.  **`npm run compile`**: Orchestrates the above steps, running `build:extension`, then `compile:tests`, then `build:webview`. This is the main script used for building the entire extension before testing or packaging. It ensures the main bundle is created first, followed by the separate compilation of tests, and finally the webview build.
+### Build Commands
+
+| Command | Description |
+|---------|-------------|
+| `bun run build` | Full build: extension + webview + CSS |
+| `bun run build:extension` | Build extension only |
+| `bun run build:webview` | Build webview React app |
+| `bun run build:webview:css` | Build Tailwind CSS |
+| `bun run dev` | Watch mode for extension development |
+| `bun run clean` | Remove dist directory |
+
+### Build Details
+
+1. **Extension Build** (`build:extension`): Uses Bun to bundle `src/extension/extension.ts` into `dist/extension.js` with CommonJS format for Node.js. The `vscode` module is external.
+
+2. **Webview Build** (`build:webview`): Uses Bun to bundle `src/webview/index.tsx` into `dist/webview/main.js` with minification.
+
+3. **CSS Build** (`build:webview:css`): Uses Tailwind CSS v4 to compile `src/webview/styles.css` into `dist/webview/styles.css`.
 
 ## Testing
 
@@ -29,41 +65,64 @@ The extension uses a multi-step build process defined in `package.json` scripts:
 
 Run tests from the project root:
 
-- Run all tests (lint, extension unit/integration, webview, package activation): `npm run test:all`
-- Run only extension unit/integration tests: `npm run test`
-- Run only webview tests: `npm run test:webview`
-- Run packaged activation test: `npm run test:package` (Note: This runs against the packaged `.vsix` and verifies successful activation, catching bundling issues).
+| Command | Description |
+|---------|-------------|
+| `bun test` | Run all tests |
+| `bun test --watch` | Run tests in watch mode |
 
 ### Writing Tests
 
-When writing new tests:
+Tests are co-located with source files using the `*.test.ts` naming convention:
 
-1. Add test cases to the appropriate test file
-2. Follow the existing pattern using `suite()` for test groups and `test()` for individual tests
-3. Use `assert` functions from the Node.js assert module for validations
+- `src/extension/versionChecker.test.ts`
+- `src/shared/fileReferenceParser.test.ts`
+- `src/extension/jsonRpcClient.test.ts`
 
-### Debugging Tests
+Use the Bun test runner with the following pattern:
 
-To debug tests:
+```typescript
+import { describe, it, expect } from "bun:test";
 
-1. Set breakpoints in your test files
-2. Use the "Extension Tests" launch configuration from `.vscode/launch.json`
-3. Select "Debug Tests" from the Testing panel's menu
+describe("MyModule", () => {
+  it("should do something", () => {
+    expect(result).toBe(expected);
+  });
+});
+```
 
-### WebView UI Testing
+## Linting and Formatting
 
-For testing the webview UI components directly:
+This project uses [Biome](https://biomejs.dev/) for linting and formatting.
 
-1. Navigate to the webview directory: `cd webview-ui`
-2. Run tests: `npm run test`
-3. Run type-checking: `npm run type-check`
-4. Return to root: `cd ..`
+| Command | Description |
+|---------|-------------|
+| `bun run lint` | Run linter |
+| `bun run lint:fix` | Run linter with auto-fix |
+| `bun run format` | Format code |
+| `bun run check` | Run both lint and format checks |
+| `bun run check:fix` | Fix both lint and format issues |
+| `bun run ci` | CI mode (fails on issues) |
+
+## Packaging
+
+To create a `.vsix` package for local testing:
+
+```bash
+bun run package
+```
+
+This will:
+
+1. Build the extension
+2. Build the webview
+3. Compile Tailwind CSS
+4. Package with `vsce`
 
 ## Commit Message Guidelines
 
-This project adheres to the **Conventional Commits** specification ([v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)). All commit messages **must** follow this format to enable automated changelog generation and version bumping by `release-please`.
+This project uses **Conventional Commits** ([v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)) with [commitlint](https://commitlint.js.org/) enforced via Husky pre-commit hooks.
 
-**Format:**
+### Format
 
 ```
 <type>[optional scope]: <description>
@@ -73,95 +132,102 @@ This project adheres to the **Conventional Commits** specification ([v1.0.0](htt
 [optional footer(s)]
 ```
 
-**Common Types:**
+### Common Types
 
-*   `feat`: A new feature for the user (corresponds to `minor` in SemVer).
-*   `fix`: A bug fix for the user (corresponds to `patch` in SemVer).
-*   `perf`: A code change that improves performance (corresponds to `patch` in SemVer).
-*   `refactor`: A code change that neither fixes a bug nor adds a feature.
-*   `style`: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc).
-*   `test`: Adding missing tests or correcting existing tests.
-*   `build`: Changes that affect the build system or external dependencies (e.g., `npm`, `esbuild`, `vsce`).
-*   `ci`: Changes to our CI configuration files and scripts (e.g., GitHub Actions).
-*   `docs`: Documentation only changes.
-*   `chore`: Other changes that don't modify `src` or `test` files (e.g., updating dependencies).
+| Type | Description | SemVer Impact |
+|------|-------------|---------------|
+| `feat` | New feature | Minor |
+| `fix` | Bug fix | Patch |
+| `perf` | Performance improvement | Patch |
+| `refactor` | Code change (no feature/fix) | None |
+| `style` | Formatting changes | None |
+| `test` | Adding/fixing tests | None |
+| `build` | Build system changes | None |
+| `ci` | CI configuration changes | None |
+| `docs` | Documentation only | None |
+| `chore` | Other maintenance | None |
 
-**Breaking Changes:** Indicate breaking changes by appending `!` after the type/scope (`feat!: ...`) or by adding `BREAKING CHANGE:` in the commit footer (corresponds to `major` in SemVer).
+### Breaking Changes
 
-**Examples:**
+Indicate breaking changes with `!` after type/scope:
 
-*   `feat(webview): add support for multiple chat sessions`
-*   `fix(server): prevent crash when goosed path is invalid`
-*   `docs: update architecture diagram for session management`
-*   `refactor(apiClient): simplify error handling logic`
-*   `chore(deps): update typescript to 5.8.2`
-*   `ci: add automated changelog generation step`
-*   `feat(api)!: change chat endpoint structure`
-
-## Release Process (Automated)
-
-This project uses **`release-please`** to automate the release process based on **Conventional Commits**.
-
-**Workflow:**
-
-1.  **Development:** Developers push features/fixes to branches and create Pull Requests (PRs) targeting the `main` branch.
-2.  **Conventional Commits:** All commits merged into `main` **must** follow the [Conventional Commits](#commit-message-guidelines) format.
-3.  **Release PR Creation:** Upon merging commits to `main`, the `Release Please` GitHub Action (`.github/workflows/ci.yml`) runs automatically.
-    *   It analyzes commits since the last release tag (`vscode-v*`).
-    *   It determines the correct semantic version bump (major, minor, or patch).
-    *   It creates or updates a special "Release PR". This PR contains:
-        *   Version bumps in `package.json`, `.release-please-manifest.json`, and `webview-ui/package.json`.
-        *   An updated `CHANGELOG.md` with entries generated from the conventional commit messages.
-4.  **Review Release PR:** Review the automatically generated Release PR:
-    *   Verify the version bump is correct.
-    *   Check that the `CHANGELOG.md` entries accurately reflect the changes.
-5.  **Merge Release PR:** Merge the Release PR into `main`.
-6.  **Tagging and Publishing:** Merging the Release PR automatically triggers the following:
-    *   `release-please` creates a Git tag (e.g., `vscode-v0.2.0`) on the merge commit.
-    *   The tag push triggers the `release` job in the GitHub Actions workflow (`.github/workflows/ci.yml`).
-    *   The `release` job:
-        *   Checks out the code at the new tag.
-        *   Installs dependencies using `npm ci`.
-        *   Builds the extension (`npm run compile`).
-        *   Packages the extension into a `.vsix` file (`dist/vscode-goose-vX.Y.Z.vsix`).
-        *   Creates a GitHub Release associated with the tag, uploading the `.vsix` file as an asset.
-        *   Publishes the `.vsix` file to the VS Code Marketplace (if `VSCE_PAT` secret is configured).
-
-**Commit Type Impact:**
-
-The type of Conventional Commit used when merging changes into `main` determines the version bump and whether the change appears in the `CHANGELOG.md`.
-
-| Commit Type Prefix | SemVer Bump Triggered | Appears in CHANGELOG.md? | Example                                      |
-| :----------------- | :-------------------- | :----------------------- | :------------------------------------------- |
-| `feat`             | Minor (0.x.0 -> 0.y.0) | Yes (under Features)     | `feat: add dark mode toggle`                 |
-| `fix`              | Patch (0.0.x -> 0.0.y) | Yes (under Bug Fixes)    | `fix: correct typo in error message`         |
-| `perf`             | Patch (0.0.x -> 0.0.y) | Yes (under Performance)  | `perf: optimize rendering loop`              |
-| `feat!` / `fix!`   | Major (x.y.z -> Y.0.0) | Yes (under BREAKING CHANGES) | `feat!: change API endpoint structure`       |
-| `refactor`         | None                  | No                       | `refactor: simplify internal logic`          |
-| `style`            | None                  | No                       | `style: format code with prettier`           |
-| `test`             | None                  | No                       | `test: add unit tests for parser`            |
-| `build`            | None                  | No                       | `build: update esbuild configuration`        |
-| `ci`               | None                  | No                       | `ci: fix workflow trigger condition`         |
-| `docs`             | None                  | No                       | `docs: update README installation steps`     |
-| `chore`            | None                  | No                       | `chore: update non-essential dependencies`   |
-
-*   **Changelog:** Only `feat`, `fix`, `perf`, and breaking changes (`!`) are included in the automatically generated `CHANGELOG.md` within the Release PR.
-*   **Publishing:** A new version is published to the VS Code Marketplace *only* when a Release PR is merged, which triggers the tag creation and the `release` workflow job. Commits like `docs`, `chore`, `refactor`, etc., merged to `main` will *not* trigger a release or appear in the changelog, although they will be included in the *next* release if a `feat` or `fix` commit triggers one later.
-
-**Manual Packaging (for testing):**
-
-While the official release is automated, you can still build a local `.vsix` package for testing purposes using the scripts defined in `package.json`:
-
--   `npm run package:dist`: Builds and packages into the `dist/` folder.
--   `npm run package:skip-tests`: Skips tests, builds, and packages into the root folder.
-
-```bash
-# Example: Create a package in dist/ for local testing
-npm run package:dist
+```
+feat!: change API endpoint structure
 ```
 
-**Note:** The `scripts/release.sh` script is **deprecated** for the main release flow but might be kept for local utility if needed (see Phase 3 tasks).
+### Examples
+
+```
+feat(webview): add support for multiple chat sessions
+fix(subprocess): prevent crash when goose path is invalid
+docs: update architecture diagram
+refactor(jsonrpc): simplify error handling
+chore(deps): update typescript to 5.8.0
+```
+
+## Configuration
+
+The extension exposes these VS Code settings:
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `goose.binaryPath` | string | `""` | Path to goose binary (empty = auto-detect) |
+| `goose.logLevel` | enum | `"info"` | Logging level: error, warn, info, debug |
+
+## Commands
+
+Registered commands accessible via Command Palette:
+
+| Command | ID | Description |
+|---------|-----|-------------|
+| Goose: Show Logs | `goose.showLogs` | Open output channel |
+| Goose: Restart | `goose.restart` | Restart goose subprocess |
+| Send to Goose | `goose.sendSelectionToChat` | Send selection to chat (Cmd+Shift+G) |
+
+## Debugging
+
+### Extension Debugging
+
+1. Set breakpoints in `src/extension/*.ts` files
+2. Press F5 to launch Extension Development Host
+3. The debugger will attach automatically
+
+### Webview Debugging
+
+1. In Extension Development Host, open the Goose panel
+2. Open Command Palette > "Developer: Open Webview Developer Tools"
+3. Use Chrome DevTools to debug React components
+
+### Subprocess Debugging
+
+View goose communication:
+
+1. Run "Goose: Show Logs" command
+2. Set `goose.logLevel` to `debug` for verbose output
+
+## Dependencies
+
+### Runtime Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| fp-ts | ^2.16.0 | Functional programming (Either, TaskEither) |
+| react-markdown | ^10.1.0 | Markdown rendering |
+| react-syntax-highlighter | ^15.6.1 | Code syntax highlighting |
+| remark-gfm | ^4.0.1 | GitHub Flavored Markdown |
+| zod | ^3.23.0 | Runtime type validation |
+
+### Dev Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| @biomejs/biome | Linting and formatting |
+| @tailwindcss/cli | CSS framework |
+| @vscode/vsce | Extension packaging |
+| typescript | Type checking |
+| husky | Git hooks |
+| @commitlint/* | Commit message linting |
 
 ## Known Issues
 
-Refer to the [GitHub issues page](https://github.com/block/vscode-goose/issues) for any known issues related to the VSCode extension.
+Refer to the [GitHub issues page](https://github.com/block/vscode-goose/issues) for known issues.

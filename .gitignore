@@ -14,7 +14,7 @@ dist/
 
 # Binary executables
 bin/
-bin/goosed
+bin/goose
 bin/*.exe
 
 # TypeScript
