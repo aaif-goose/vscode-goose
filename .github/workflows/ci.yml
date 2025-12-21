@@ -41,24 +41,25 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_PAT }}
           
       # The following steps only run if a release was created
-      - name: Setup Node.js
+      - name: Setup Bun
+        if: steps.release.outputs.release_created
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js (for vsce)
         if: steps.release.outputs.release_created
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
-      - name: Install Dependencies (Root)
+      - name: Install Dependencies
         if: steps.release.outputs.release_created
-        run: npm ci --no-fund --no-audit
+        run: bun install --frozen-lockfile
 
-      - name: Install Dependencies (Webview)
+      - name: Build Extension
         if: steps.release.outputs.release_created
-        run: npm ci --no-fund --no-audit --prefix webview-ui
-
-      - name: Build Extension and Webview
-        if: steps.release.outputs.release_created
-        run: npm run compile
+        run: bun run build
 
       - name: Package Extension
         if: steps.release.outputs.release_created
@@ -101,29 +102,19 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '20'
-          cache: 'npm'
+          bun-version: latest
 
       - name: Install Dependencies
-        run: |
-          npm ci --no-fund --no-audit
-          npm ci --no-fund --no-audit --prefix webview-ui
+        run: bun install --frozen-lockfile
 
       - name: Lint
-        run: |
-          npm run lint
+        run: bun run lint
 
-      - name: Install Xvfb
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
+      - name: Run Tests
+        run: bun test
 
-      - name: Run Tests with Xvfb
-        run: |
-          xvfb-run -a sh -c "npm run test:all && npm run test:package"
-
-      - name: Compile extension and webview
-        run: npm run compile # This includes build:webview
+      - name: Build
+        run: bun run build
