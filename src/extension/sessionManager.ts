@@ -161,9 +161,12 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
       const { sessionUpdate, content } = params.update;
       if (!content) return;
 
-      const role = sessionUpdate === 'user_message_chunk' ? MessageRole.USER
-        : sessionUpdate === 'agent_message_chunk' ? MessageRole.ASSISTANT
-        : null;
+      const role =
+        sessionUpdate === 'user_message_chunk'
+          ? MessageRole.USER
+          : sessionUpdate === 'agent_message_chunk'
+            ? MessageRole.ASSISTANT
+            : null;
 
       if (!role) return;
 
@@ -188,10 +191,12 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
           content: '', // No text content
           timestamp: undefined,
           status: MessageStatus.COMPLETE,
-          context: [{
-            filePath,
-            fileName,
-          }],
+          context: [
+            {
+              filePath,
+              fileName,
+            },
+          ],
         };
         historyMessageCallbacks.forEach(cb => cb(msg));
         messageCount++;
@@ -207,11 +212,13 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
           content: '', // No text content, it's in context
           timestamp: undefined,
           status: MessageStatus.COMPLETE,
-          context: [{
-            filePath,
-            fileName,
-            content: fileContent,
-          }],
+          context: [
+            {
+              filePath,
+              fileName,
+              content: fileContent,
+            },
+          ],
         };
         historyMessageCallbacks.forEach(cb => cb(msg));
         messageCount++;

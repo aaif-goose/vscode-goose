@@ -36,7 +36,8 @@ export type ParseResult =
  * - Then `# ` followed by an absolute path (starts with / or drive letter)
  * - Optionally followed by a code block (with optional language specifier)
  */
-const H1_FILE_REFERENCE_PATTERN = /^\s*#\s+(\/[^\n]+|[A-Za-z]:\\[^\n]+)\s*(?:```(\w*)?\n([\s\S]*?)```\s*)?$/;
+const H1_FILE_REFERENCE_PATTERN =
+  /^\s*#\s+(\/[^\n]+|[A-Za-z]:\\[^\n]+)\s*(?:```(\w*)?\n([\s\S]*?)```\s*)?$/;
 
 /**
  * Pattern to detect file reference format (File: style with line numbers):
@@ -44,7 +45,8 @@ const H1_FILE_REFERENCE_PATTERN = /^\s*#\s+(\/[^\n]+|[A-Za-z]:\\[^\n]+)\s*(?:```
  * - Optionally with line range `:startLine-endLine`
  * - Followed by a code block
  */
-const FILE_PREFIX_PATTERN = /^\s*File:\s+(\/[^\n:]+|[A-Za-z]:\\[^\n:]+)(?::(\d+)-(\d+))?\s*(?:```(\w*)?\n([\s\S]*?)```\s*)?$/;
+const FILE_PREFIX_PATTERN =
+  /^\s*File:\s+(\/[^\n:]+|[A-Za-z]:\\[^\n:]+)(?::(\d+)-(\d+))?\s*(?:```(\w*)?\n([\s\S]*?)```\s*)?$/;
 
 /**
  * Checks if content appears to be a file reference message from Goose.
@@ -112,9 +114,8 @@ export function parseFileReference(content: string): ParsedFileReference | null 
       fileName,
       content: fileContent,
       language,
-      lineRange: startLine !== undefined && endLine !== undefined
-        ? { startLine, endLine }
-        : undefined,
+      lineRange:
+        startLine !== undefined && endLine !== undefined ? { startLine, endLine } : undefined,
     };
   }
 

@@ -33,7 +33,9 @@ export function ErrorMessage({ content, timestamp, onRetry, originalContent }: E
           </div>
         </div>
       </div>
-      <p className={`text-xs text-[var(--vscode-descriptionForeground)] mt-1 ${!timestamp ? 'italic' : ''}`}>
+      <p
+        className={`text-xs text-[var(--vscode-descriptionForeground)] mt-1 ${!timestamp ? 'italic' : ''}`}
+      >
         {formatTime(timestamp)}
       </p>
     </div>

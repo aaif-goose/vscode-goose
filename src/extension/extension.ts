@@ -131,8 +131,21 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
 /** ACP streaming content block types */
 type AcpStreamContentBlock =
   | { readonly type: 'text'; readonly text: string }
-  | { readonly type: 'resource_link'; readonly uri: string; readonly name: string; readonly mimeType?: string }
-  | { readonly type: 'resource'; readonly resource: { readonly uri: string; readonly text?: string; readonly blob?: string; readonly mimeType?: string } };
+  | {
+      readonly type: 'resource_link';
+      readonly uri: string;
+      readonly name: string;
+      readonly mimeType?: string;
+    }
+  | {
+      readonly type: 'resource';
+      readonly resource: {
+        readonly uri: string;
+        readonly text?: string;
+        readonly blob?: string;
+        readonly mimeType?: string;
+      };
+    };
 
 interface AcpSessionUpdateParams {
   readonly sessionId: string;
@@ -301,7 +314,9 @@ async function initializeAcpSession(
           embeddedContext: agentCaps.promptCapabilities?.embeddedContext ?? false,
         },
       };
-      log.info(`Agent capabilities: loadSession=${capabilities.loadSession}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`);
+      log.info(
+        `Agent capabilities: loadSession=${capabilities.loadSession}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`
+      );
     }
   } else {
     log.warn('ACP initialize failed, using default capabilities:', initResult.left);
@@ -357,7 +372,11 @@ function setupAcpCommunication(
     if (method === 'session/update' && params?.update) {
       const { sessionUpdate, content } = params.update;
 
-      if (sessionUpdate === 'agent_message_chunk' && currentResponseId && content?.type === 'text') {
+      if (
+        sessionUpdate === 'agent_message_chunk' &&
+        currentResponseId &&
+        content?.type === 'text'
+      ) {
         provider.postMessage(createStreamTokenMessage(currentResponseId, content.text, false));
       }
     }

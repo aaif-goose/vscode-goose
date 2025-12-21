@@ -25,7 +25,10 @@ function formatContextLabel(ctx: MessageContext): string {
   return ctx.fileName;
 }
 
-function truncateContent(content: string, maxLines: number): { truncated: string; isTruncated: boolean; totalLines: number } {
+function truncateContent(
+  content: string,
+  maxLines: number
+): { truncated: string; isTruncated: boolean; totalLines: number } {
   const lines = content.split('\n');
   if (lines.length <= maxLines) {
     return { truncated: content, isTruncated: false, totalLines: lines.length };
@@ -49,7 +52,8 @@ export function UserMessage({ content, timestamp, context }: UserMessageProps) {
   // Only truncate history messages (no timestamp) that aren't file references
   const isHistoryMessage = !timestamp;
   const { truncated, isTruncated, totalLines } = truncateContent(content, MAX_LINES_COLLAPSED);
-  const displayContent = isHistoryMessage && isTruncated && !isExpanded && !isFileReference ? truncated : content;
+  const displayContent =
+    isHistoryMessage && isTruncated && !isExpanded && !isFileReference ? truncated : content;
 
   return (
     <div className="flex flex-col items-end">
@@ -92,7 +96,9 @@ export function UserMessage({ content, timestamp, context }: UserMessageProps) {
           </div>
         ) : null}
 
-        <p className={`text-xs text-[var(--vscode-descriptionForeground)] mt-1 text-right ${!timestamp ? 'italic' : ''}`}>
+        <p
+          className={`text-xs text-[var(--vscode-descriptionForeground)] mt-1 text-right ${!timestamp ? 'italic' : ''}`}
+        >
           {formatTime(timestamp)}
         </p>
       </div>

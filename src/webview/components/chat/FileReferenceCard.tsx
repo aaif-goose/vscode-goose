@@ -49,14 +49,14 @@ export function FileReferenceCard({ reference }: FileReferenceCardProps) {
         <span className="font-medium truncate">
           {fileName}
           {reference.lineRange && (
-            <span className="opacity-70">:{reference.lineRange.startLine}-{reference.lineRange.endLine}</span>
+            <span className="opacity-70">
+              :{reference.lineRange.startLine}-{reference.lineRange.endLine}
+            </span>
           )}
         </span>
         {/* Show directory path only when collapsed */}
         {!isExpanded && (
-          <span className="text-xs opacity-70 truncate min-w-0">
-            {getDirectoryPath(filePath)}
-          </span>
+          <span className="text-xs opacity-70 truncate min-w-0">{getDirectoryPath(filePath)}</span>
         )}
       </button>
 

@@ -67,7 +67,6 @@ export function ContextChip({ chip, isFocused, onRemove, onFocus }: ContextChipP
   );
 }
 
-
 interface CloseIconProps {
   className?: string;
 }

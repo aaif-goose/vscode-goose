@@ -20,7 +20,10 @@ function formatTime(date?: Date): string {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function truncateContent(content: string, maxLines: number): { truncated: string; isTruncated: boolean; totalLines: number } {
+function truncateContent(
+  content: string,
+  maxLines: number
+): { truncated: string; isTruncated: boolean; totalLines: number } {
   const lines = content.split('\n');
   if (lines.length <= maxLines) {
     return { truncated: content, isTruncated: false, totalLines: lines.length };
@@ -49,14 +52,16 @@ export function AssistantMessage({
   // Only truncate history messages (no timestamp) that aren't streaming and aren't file references
   const isHistoryMessage = !timestamp;
   const { truncated, isTruncated, totalLines } = truncateContent(content, MAX_LINES_COLLAPSED);
-  const displayContent = isHistoryMessage && isTruncated && !isExpanded && !isStreaming && !isFileReference
-    ? truncated
-    : content;
+  const displayContent =
+    isHistoryMessage && isTruncated && !isExpanded && !isStreaming && !isFileReference
+      ? truncated
+      : content;
 
   // Get copy text - for file references, use the file content if available
-  const copyText = isFileReference && parsedContent.type === 'file_reference'
-    ? parsedContent.reference.content || content
-    : content;
+  const copyText =
+    isFileReference && parsedContent.type === 'file_reference'
+      ? parsedContent.reference.content || content
+      : content;
 
   return (
     <div className="flex flex-col items-start group">
@@ -87,7 +92,9 @@ export function AssistantMessage({
           )}
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <p className={`text-xs text-[var(--vscode-descriptionForeground)] ${!timestamp ? 'italic' : ''}`}>
+          <p
+            className={`text-xs text-[var(--vscode-descriptionForeground)] ${!timestamp ? 'italic' : ''}`}
+          >
             {formatTime(timestamp)}
           </p>
           {status === MessageStatus.CANCELLED && (

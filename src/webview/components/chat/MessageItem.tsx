@@ -23,9 +23,7 @@ export function MessageItem({
     : '';
 
   if (message.role === MessageRole.USER) {
-    const timeLabel = message.timestamp
-      ? ` at ${message.timestamp.toLocaleTimeString()}`
-      : '';
+    const timeLabel = message.timestamp ? ` at ${message.timestamp.toLocaleTimeString()}` : '';
     return (
       <div
         className={`${focusClasses} rounded-lg`}
@@ -33,15 +31,17 @@ export function MessageItem({
         role="article"
         aria-label={`User message${timeLabel}`}
       >
-        <UserMessage content={message.content} timestamp={message.timestamp} context={message.context} />
+        <UserMessage
+          content={message.content}
+          timestamp={message.timestamp}
+          context={message.context}
+        />
       </div>
     );
   }
 
   if (message.role === MessageRole.ASSISTANT) {
-    const timeLabel = message.timestamp
-      ? ` at ${message.timestamp.toLocaleTimeString()}`
-      : '';
+    const timeLabel = message.timestamp ? ` at ${message.timestamp.toLocaleTimeString()}` : '';
     return (
       <div
         className={`${focusClasses} rounded-lg`}
