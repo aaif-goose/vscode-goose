@@ -1,7 +1,7 @@
-import { describe, expect, test, beforeEach } from 'bun:test';
-import { createSessionStorage, SessionStorage } from './sessionStorage';
-import { createMockMemento, MockMemento } from '../test/mocks/vscode';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { SessionEntry } from '../shared/sessionTypes';
+import { createMockMemento, MockMemento } from '../test/mocks/vscode';
+import { createSessionStorage, SessionStorage } from './sessionStorage';
 
 describe('SessionStorage', () => {
   let memento: MockMemento;

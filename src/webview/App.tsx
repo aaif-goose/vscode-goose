@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
-import { initializeBridge, onMessage } from './bridge';
-import { ProcessStatus } from '../shared/types';
 import {
   isStatusUpdateMessage,
   isVersionStatusMessage,
   VersionStatusPayload,
 } from '../shared/messages';
+import { ProcessStatus } from '../shared/types';
+import { initializeBridge, onMessage } from './bridge';
 import { ChatView } from './components/chat/ChatView';
 import { SessionHeader, SessionList } from './components/session';
 import { VersionBlockedView } from './components/VersionBlockedView';
-import { useSession } from './hooks/useSession';
 import { useChat } from './hooks/useChat';
 import { useContextChips } from './hooks/useContextChips';
+import { useSession } from './hooks/useSession';
 
 export function App() {
   const [status, setStatus] = useState<ProcessStatus>(ProcessStatus.STOPPED);

@@ -19,13 +19,6 @@
     "noUnusedParameters": true,
     "baseUrl": "."
   },
-  "include": [
-    "src/webview/**/*",
-    "src/shared/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "src/extension"
-  ]
+  "include": ["src/webview/**/*", "src/shared/**/*"],
+  "exclude": ["node_modules", "dist", "src/extension"]
 }

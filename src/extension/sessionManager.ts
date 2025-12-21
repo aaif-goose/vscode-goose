@@ -3,21 +3,21 @@
  * Coordinates between ACP client, session storage, and webview.
  */
 
-import * as TE from 'fp-ts/TaskEither';
 import { pipe } from 'fp-ts/function';
-import { JsonRpcClient } from './jsonRpcClient';
-import { SessionStorage } from './sessionStorage';
-import { Logger } from './logger';
+import * as TE from 'fp-ts/TaskEither';
+import { createJsonRpcError, GooseError } from '../shared/errors';
 import {
-  SessionEntry,
   AgentCapabilities,
-  GroupedSessions,
-  groupSessionsByDate,
-  generateSessionTitle,
   DEFAULT_CAPABILITIES,
+  GroupedSessions,
+  generateSessionTitle,
+  groupSessionsByDate,
+  SessionEntry,
 } from '../shared/sessionTypes';
-import { ChatMessage, MessageRole, MessageStatus, JsonRpcNotification } from '../shared/types';
-import { GooseError, createJsonRpcError } from '../shared/errors';
+import { ChatMessage, JsonRpcNotification, MessageRole, MessageStatus } from '../shared/types';
+import { JsonRpcClient } from './jsonRpcClient';
+import { Logger } from './logger';
+import { SessionStorage } from './sessionStorage';
 
 interface AcpSessionNewResponse {
   readonly sessionId: string;

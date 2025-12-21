@@ -3,49 +3,49 @@
  * Manages activation, subprocess lifecycle, and webview registration.
  */
 
-import * as vscode from 'vscode';
-import * as fs from 'fs/promises';
 import * as E from 'fp-ts/Either';
-import { createLogger, Logger } from './logger';
-import { getLogLevel, getBinaryDiscoveryConfig, onConfigChange, affectsSetting } from './config';
-import { discoverBinary } from './binaryDiscovery';
+import * as fs from 'fs/promises';
+import * as vscode from 'vscode';
 import {
   formatError,
   isBinaryNotFoundError,
   isSubprocessSpawnError,
   SubprocessSpawnError,
 } from '../shared/errors';
-import { createSubprocessManager, SubprocessManager } from './subprocessManager';
-import { createWebviewProvider, WebviewProvider } from './webviewProvider';
-import { registerCommands, registerContextCommands } from './commands';
-import { checkVersion, MINIMUM_VERSION } from './versionChecker';
-import { ProcessStatus, JsonRpcNotification } from '../shared/types';
 import {
+  ContextChipData,
+  createChatHistoryMessage,
+  createErrorMessage,
+  createGenerationCancelledMessage,
+  createGenerationCompleteMessage,
+  createHistoryCompleteMessage,
+  createHistoryMessage,
+  createSearchResultsMessage,
+  createSessionCreatedMessage,
+  createSessionLoadedMessage,
+  createSessionsListMessage,
+  createStreamTokenMessage,
+  isCreateSessionMessage,
+  isFileSearchMessage,
+  isGetSessionsMessage,
+  isOpenExternalLinkMessage,
+  isSelectSessionMessage,
   isSendMessageMessage,
   isStopGenerationMessage,
-  isCreateSessionMessage,
-  isGetSessionsMessage,
-  isSelectSessionMessage,
-  isOpenExternalLinkMessage,
-  isFileSearchMessage,
-  createStreamTokenMessage,
-  createGenerationCompleteMessage,
-  createGenerationCancelledMessage,
-  createErrorMessage,
-  createSessionCreatedMessage,
-  createSessionsListMessage,
-  createSessionLoadedMessage,
-  createHistoryMessage,
-  createHistoryCompleteMessage,
-  createChatHistoryMessage,
-  createSearchResultsMessage,
-  ContextChipData,
 } from '../shared/messages';
-import { JsonRpcClient } from './jsonRpcClient';
-import { createSessionStorage, SessionStorage } from './sessionStorage';
-import { createSessionManager, SessionManager } from './sessionManager';
-import { createFileSearchService, FileSearchService } from './fileSearchService';
 import { DEFAULT_CAPABILITIES, SessionEntry } from '../shared/sessionTypes';
+import { JsonRpcNotification, ProcessStatus } from '../shared/types';
+import { discoverBinary } from './binaryDiscovery';
+import { registerCommands, registerContextCommands } from './commands';
+import { affectsSetting, getBinaryDiscoveryConfig, getLogLevel, onConfigChange } from './config';
+import { createFileSearchService, FileSearchService } from './fileSearchService';
+import { JsonRpcClient } from './jsonRpcClient';
+import { createLogger, Logger } from './logger';
+import { createSessionManager, SessionManager } from './sessionManager';
+import { createSessionStorage, SessionStorage } from './sessionStorage';
+import { createSubprocessManager, SubprocessManager } from './subprocessManager';
+import { checkVersion, MINIMUM_VERSION } from './versionChecker';
+import { createWebviewProvider, WebviewProvider } from './webviewProvider';
 
 let logger: Logger | null = null;
 let subprocessManager: SubprocessManager | null = null;

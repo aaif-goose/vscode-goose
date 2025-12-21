@@ -64,6 +64,7 @@ export function FilePicker({
   }, [isOpen, results, selectedIndex, onClose, onNavigate, onSelect]);
 
   // Scroll selected item into view
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedIndex triggers scroll into view
   useEffect(() => {
     if (selectedItemRef.current && containerRef.current) {
       selectedItemRef.current.scrollIntoView({

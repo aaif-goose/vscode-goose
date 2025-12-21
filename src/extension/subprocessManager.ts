@@ -4,17 +4,17 @@
  */
 
 import { ChildProcess, spawn } from 'child_process';
-import * as TE from 'fp-ts/TaskEither';
 import * as E from 'fp-ts/Either';
+import * as TE from 'fp-ts/TaskEither';
 import {
-  SubprocessSpawnError,
-  SubprocessCrashError,
-  createSubprocessSpawnError,
   createSubprocessCrashError,
+  createSubprocessSpawnError,
+  SubprocessCrashError,
+  SubprocessSpawnError,
 } from '../shared/errors';
 import { ProcessStatus } from '../shared/types';
+import { createJsonRpcClient, JsonRpcClient } from './jsonRpcClient';
 import { Logger } from './logger';
-import { JsonRpcClient, createJsonRpcClient } from './jsonRpcClient';
 
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
 

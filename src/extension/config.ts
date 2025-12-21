@@ -2,11 +2,11 @@
  * VS Code configuration reader for Goose extension settings.
  */
 
-import * as vscode from 'vscode';
-import * as O from 'fp-ts/Option';
 import { pipe } from 'fp-ts/function';
-import { LogLevel, parseLogLevel, BinaryDiscoveryConfig } from '../shared/types';
+import * as O from 'fp-ts/Option';
 import * as os from 'os';
+import * as vscode from 'vscode';
+import { BinaryDiscoveryConfig, LogLevel, parseLogLevel } from '../shared/types';
 
 const CONFIG_SECTION = 'goose';
 

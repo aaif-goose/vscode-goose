@@ -1,8 +1,8 @@
-import { useRef, useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useChat } from '../../hooks/useChat';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
-import { MessageList, MessageListHandle } from './MessageList';
 import { InputArea } from './InputArea';
+import { MessageList, MessageListHandle } from './MessageList';
 
 interface ChatContainerProps {
   className?: string;

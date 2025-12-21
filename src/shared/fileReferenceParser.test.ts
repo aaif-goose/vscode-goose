@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  isFileReferenceContent,
-  parseFileReference,
-  parseContent,
   getLanguageFromPath,
+  isFileReferenceContent,
+  parseContent,
+  parseFileReference,
 } from './fileReferenceParser';
 
 describe('isFileReferenceContent', () => {

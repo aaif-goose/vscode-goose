@@ -3,8 +3,8 @@
  * Shows guidance for installing or updating Goose when version requirements are not met.
  */
 
-import { postMessage } from '../bridge';
 import { createOpenExternalLinkMessage } from '../../shared/messages';
+import { postMessage } from '../bridge';
 
 export interface VersionBlockedViewProps {
   status: 'blocked_missing' | 'blocked_outdated';

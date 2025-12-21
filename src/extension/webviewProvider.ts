@@ -4,15 +4,15 @@
  */
 
 import * as vscode from 'vscode';
-import { Logger } from './logger';
 import {
   AnyWebviewMessage,
-  isWebviewReadyMessage,
   createStatusUpdateMessage,
   createVersionStatusMessage,
+  isWebviewReadyMessage,
   VersionStatusPayload,
 } from '../shared/messages';
 import { ProcessStatus } from '../shared/types';
+import { Logger } from './logger';
 
 /** Configuration for creating a webview provider */
 export interface WebviewProviderConfig {

@@ -1,10 +1,10 @@
-import { useRef, useCallback } from 'react';
+import { useCallback, useRef } from 'react';
+import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
 import { UseChatReturn } from '../../hooks/useChat';
-import { useKeyboardNav } from '../../hooks/useKeyboardNav';
 import { UseContextChipsReturn } from '../../hooks/useContextChips';
-import { MessageList, MessageListHandle } from './MessageList';
+import { useKeyboardNav } from '../../hooks/useKeyboardNav';
 import { InputArea } from './InputArea';
-import type { FileSearchResult, ContextChip } from '../../../shared/contextTypes';
+import { MessageList, MessageListHandle } from './MessageList';
 
 interface ChatViewProps {
   className?: string;

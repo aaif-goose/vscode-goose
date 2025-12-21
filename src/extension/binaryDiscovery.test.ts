@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import * as E from 'fp-ts/Either';
 import { BinaryDiscoveryConfig } from '../shared/types';
 
@@ -22,11 +22,11 @@ mock.module('fs', () => ({
 
 // Import the module under test AFTER mocking fs
 import {
-  expandPath,
   checkPathExists,
+  discoverBinary,
+  expandPath,
   findInPath,
   findInPlatformPaths,
-  discoverBinary,
   getAllSearchPaths,
 } from './binaryDiscovery';
 

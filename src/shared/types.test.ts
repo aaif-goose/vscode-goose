@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { parseLogLevel, LogLevel } from './types';
+import { LogLevel, parseLogLevel } from './types';
 
 describe('parseLogLevel', () => {
   describe('known levels parse correctly', () => {

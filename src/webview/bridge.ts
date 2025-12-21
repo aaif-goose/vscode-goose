@@ -4,8 +4,8 @@
 
 import {
   AnyWebviewMessage,
-  WebviewMessageType,
   createWebviewReadyMessage,
+  WebviewMessageType,
 } from '../shared/messages';
 
 declare global {

@@ -2,16 +2,16 @@
  * VS Code command registration for Goose extension.
  */
 
-import * as vscode from 'vscode';
-import * as path from 'path';
 import * as E from 'fp-ts/Either';
+import * as path from 'path';
+import * as vscode from 'vscode';
+import { ContextChip } from '../shared/contextTypes';
+import { createAddContextChipMessage, createFocusChatInputMessage } from '../shared/messages';
+import { discoverBinary } from './binaryDiscovery';
+import { getBinaryDiscoveryConfig } from './config';
 import { Logger } from './logger';
 import { SubprocessManager } from './subprocessManager';
 import { WebviewProvider } from './webviewProvider';
-import { discoverBinary } from './binaryDiscovery';
-import { getBinaryDiscoveryConfig } from './config';
-import { ContextChip } from '../shared/contextTypes';
-import { createAddContextChipMessage, createFocusChatInputMessage } from '../shared/messages';
 
 /** Dependencies for command registration */
 export interface CommandDependencies {

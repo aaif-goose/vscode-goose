@@ -2,7 +2,7 @@
  * Session card component for displaying a session in the list.
  */
 
-import { SessionEntry, formatSessionTime, truncatePath } from '../../../shared/sessionTypes';
+import { formatSessionTime, SessionEntry, truncatePath } from '../../../shared/sessionTypes';
 
 interface SessionCardProps {
   session: SessionEntry;

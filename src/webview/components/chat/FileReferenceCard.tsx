@@ -4,10 +4,10 @@
  */
 
 import { useState } from 'react';
-import { FileTypeIcon } from '../icons/FileTypeIcon';
-import { CodeBlock } from '../markdown/CodeBlock';
 import type { ParsedFileReference } from '../../../shared/fileReferenceParser';
 import { getLanguageFromPath } from '../../../shared/fileReferenceParser';
+import { FileTypeIcon } from '../icons/FileTypeIcon';
+import { CodeBlock } from '../markdown/CodeBlock';
 
 interface FileReferenceCardProps {
   reference: ParsedFileReference;

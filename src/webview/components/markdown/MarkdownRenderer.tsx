@@ -1,9 +1,9 @@
+import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Components } from 'react-markdown';
-import { CodeBlock } from './CodeBlock';
-import { postMessage } from '../../bridge';
 import { WebviewMessageType } from '../../../shared/messages';
+import { postMessage } from '../../bridge';
+import { CodeBlock } from './CodeBlock';
 
 interface MarkdownRendererProps {
   content: string;

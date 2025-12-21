@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { ContextChip as ContextChipType } from '../../../shared/contextTypes';
 import { ContextChip } from './ContextChip';
 

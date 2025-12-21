@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  formatError,
   createBinaryNotFoundError,
-  createSubprocessSpawnError,
-  createSubprocessCrashError,
+  createJsonRpcError,
   createJsonRpcParseError,
   createJsonRpcTimeoutError,
-  createJsonRpcError,
+  createSubprocessCrashError,
+  createSubprocessSpawnError,
   createVersionMismatchError,
+  formatError,
 } from './errors';
 
 describe('formatError', () => {

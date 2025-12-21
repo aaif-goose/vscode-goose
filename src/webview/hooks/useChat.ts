@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
-import { onMessage, postMessage, getState, setState } from '../bridge';
-import { ChatMessage, MessageRole, MessageStatus, MessageContext } from '../../shared/types';
+import type { ContextChip } from '../../shared/contextTypes';
 import {
+  ContextChipData,
   createSendMessageMessage,
   createStopGenerationMessage,
-  isStreamTokenMessage,
-  isGenerationCompleteMessage,
-  isGenerationCancelledMessage,
   isChatHistoryMessage,
+  isGenerationCancelledMessage,
+  isGenerationCompleteMessage,
   isHistoryMessage,
   isSessionCreatedMessage,
-  ContextChipData,
+  isStreamTokenMessage,
 } from '../../shared/messages';
-import type { ContextChip } from '../../shared/contextTypes';
+import { ChatMessage, MessageContext, MessageRole, MessageStatus } from '../../shared/types';
+import { getState, onMessage, postMessage, setState } from '../bridge';
 
 interface ChatState {
   messages: ChatMessage[];

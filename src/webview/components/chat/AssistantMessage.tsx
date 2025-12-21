@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { MessageStatus } from '../../../shared/types';
-import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
-import { CopyButton } from '../markdown/CopyButton';
-import { ProgressIndicator } from './ProgressIndicator';
-import { FileReferenceCard } from './FileReferenceCard';
 import { parseContent } from '../../../shared/fileReferenceParser';
+import { MessageStatus } from '../../../shared/types';
+import { CopyButton } from '../markdown/CopyButton';
+import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
+import { FileReferenceCard } from './FileReferenceCard';
+import { ProgressIndicator } from './ProgressIndicator';
 
 const MAX_LINES_COLLAPSED = 15;
 

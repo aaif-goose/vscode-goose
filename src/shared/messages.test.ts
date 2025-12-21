@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  isWebviewMessage,
-  isStatusUpdateMessage,
   isSendMessageMessage,
+  isStatusUpdateMessage,
   isVersionStatusMessage,
+  isWebviewMessage,
   WebviewMessageType,
 } from './messages';
 

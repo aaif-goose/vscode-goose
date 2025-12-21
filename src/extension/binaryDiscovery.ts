@@ -3,10 +3,10 @@
  * Searches user settings, PATH, and platform-specific installation locations.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import * as E from 'fp-ts/Either';
 import { pipe } from 'fp-ts/function';
+import * as fs from 'fs';
+import * as path from 'path';
 import { BinaryNotFoundError, createBinaryNotFoundError, toLeft, toRight } from '../shared/errors';
 import { BinaryDiscoveryConfig } from '../shared/types';
 

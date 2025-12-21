@@ -4,9 +4,9 @@
  */
 
 import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
-import { onMessage, postMessage } from '../bridge';
 import { FileSearchResult } from '../../shared/contextTypes';
 import { createFileSearchMessage, isSearchResultsMessage } from '../../shared/messages';
+import { onMessage, postMessage } from '../bridge';
 
 interface FilePickerState {
   isOpen: boolean;

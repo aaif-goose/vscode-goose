@@ -4,9 +4,9 @@
  */
 
 import { spawn } from 'child_process';
-import * as TE from 'fp-ts/TaskEither';
 import * as E from 'fp-ts/Either';
-import { VersionMismatchError, createVersionMismatchError } from '../shared/errors';
+import * as TE from 'fp-ts/TaskEither';
+import { createVersionMismatchError, VersionMismatchError } from '../shared/errors';
 
 export const MINIMUM_VERSION = '1.16.0';
 const VERSION_CHECK_TIMEOUT_MS = 5000;

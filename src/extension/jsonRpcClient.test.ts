@@ -1,9 +1,9 @@
-import { describe, expect, test, beforeEach } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import * as E from 'fp-ts/Either';
+import { isJsonRpcError, isJsonRpcTimeoutError } from '../shared/errors';
 import { createMockStreams, MockStreams } from '../test/mocks/streams';
 import { createJsonRpcClient, JsonRpcClient, JsonRpcClientConfig } from './jsonRpcClient';
 import { Logger } from './logger';
-import { isJsonRpcError, isJsonRpcTimeoutError } from '../shared/errors';
 
 /**
  * Tests for JSON-RPC 2.0 client implementation.
@@ -12,11 +12,12 @@ import { isJsonRpcError, isJsonRpcTimeoutError } from '../shared/errors';
 
 // Create a no-op logger for testing
 function createMockLogger(): Logger {
+  const noop = () => undefined;
   return {
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
   };
 }
 

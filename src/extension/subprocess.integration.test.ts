@@ -4,13 +4,13 @@
  * without spawning a real subprocess.
  */
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import * as E from 'fp-ts/Either';
 import { Readable, Writable } from 'stream';
+import { isJsonRpcError } from '../shared/errors';
+import { JsonRpcNotification, JsonRpcRequest, JsonRpcResponse } from '../shared/types';
 import { createJsonRpcClient, JsonRpcClient, JsonRpcClientConfig } from './jsonRpcClient';
 import { Logger } from './logger';
-import { JsonRpcRequest, JsonRpcResponse, JsonRpcNotification } from '../shared/types';
-import { isJsonRpcError } from '../shared/errors';
 
 // ============================================================================
 // Mock Subprocess Simulator
@@ -228,11 +228,12 @@ class MockSubprocess {
 
 /** Create a no-op logger for testing */
 function createMockLogger(): Logger {
+  const noop = () => undefined;
   return {
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
   };
 }
 

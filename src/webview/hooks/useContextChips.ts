@@ -4,9 +4,9 @@
  */
 
 import { useCallback, useEffect, useReducer } from 'react';
-import { onMessage } from '../bridge';
 import { ContextChip, LineRange } from '../../shared/contextTypes';
 import { isAddContextChipMessage } from '../../shared/messages';
+import { onMessage } from '../bridge';
 
 interface ContextChipsState {
   chips: ContextChip[];

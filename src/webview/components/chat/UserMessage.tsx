@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
+import { getLanguageFromPath, parseContent } from '../../../shared/fileReferenceParser';
 import { MessageContext } from '../../../shared/types';
-import { FileReferenceCard } from './FileReferenceCard';
 import { FileTypeIcon } from '../icons/FileTypeIcon';
-import { parseContent, getLanguageFromPath } from '../../../shared/fileReferenceParser';
+import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
+import { FileReferenceCard } from './FileReferenceCard';
 
 const MAX_LINES_COLLAPSED = 15;
 

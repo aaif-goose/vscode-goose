@@ -1,12 +1,12 @@
-import { useRef, useEffect, KeyboardEvent, useCallback } from 'react';
+import { KeyboardEvent, useCallback, useEffect, useRef } from 'react';
+import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
+import { isFocusChatInputMessage } from '../../../shared/messages';
+import { onMessage } from '../../bridge';
+import { useFilePicker } from '../../hooks/useFilePicker';
+import { FilePicker } from '../picker/FilePicker';
+import { ChipStack } from './ChipStack';
 import { SendButton } from './SendButton';
 import { StopButton } from './StopButton';
-import { ChipStack } from './ChipStack';
-import { FilePicker } from '../picker/FilePicker';
-import { useFilePicker } from '../../hooks/useFilePicker';
-import { onMessage } from '../../bridge';
-import { isFocusChatInputMessage } from '../../../shared/messages';
-import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
 
 interface InputAreaProps {
   value: string;
@@ -47,9 +47,11 @@ export function InputArea({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Initialize file picker hook
+  // biome-ignore lint/suspicious/noEmptyBlockStatements: intentional noop
   const noopAddChip = useCallback(() => {}, []);
   const filePicker = useFilePicker(onAddFileChip ?? noopAddChip, textareaRef, onChange);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: value triggers textarea resize
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -176,6 +178,7 @@ export function InputArea({
     (direction: 'up' | 'down') => {
       const e = {
         key: direction === 'up' ? 'ArrowUp' : 'ArrowDown',
+        // biome-ignore lint/suspicious/noEmptyBlockStatements: mock event handler
         preventDefault: () => {},
       } as React.KeyboardEvent;
       filePicker.handleKeyDown(e);

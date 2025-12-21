@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { createMockMemento } from './vscode';
 import { createMockStreams } from './streams';
+import { createMockMemento } from './vscode';
 
 describe('createMockMemento', () => {
   test('returns undefined for missing key', () => {
@@ -62,6 +62,7 @@ describe('createMockStreams', () => {
     });
 
     // Need to consume data for 'end' to fire
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: intentional noop for stream consumption
     stdout.on('data', () => {});
     close();
   });

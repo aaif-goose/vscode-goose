@@ -3,10 +3,10 @@
  * Uses VS Code workspace APIs to find files with fuzzy matching.
  */
 
-import * as vscode from 'vscode';
 import * as path from 'path';
-import { Logger } from './logger';
+import * as vscode from 'vscode';
 import { FileSearchResult } from '../shared/contextTypes';
+import { Logger } from './logger';
 
 /** Service for searching workspace files */
 export interface FileSearchService {
@@ -78,7 +78,8 @@ export function createFileSearchService(logger: Logger): FileSearchService {
   });
 
   async function search(query: string): Promise<readonly FileSearchResult[]> {
-    const exclude = '{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/.venv/**,**/venv/**,**/__pycache__/**,**/target/**}';
+    const exclude =
+      '{**/node_modules/**,**/.git/**,**/dist/**,**/build/**,**/.venv/**,**/venv/**,**/__pycache__/**,**/target/**}';
     const lowerQuery = query.toLowerCase();
 
     logger.debug(`Searching files with query: ${query}`);
@@ -89,8 +90,8 @@ export function createFileSearchService(logger: Logger): FileSearchService {
       // When there's a query, use glob pattern to let VS Code search more efficiently
       // Try multiple patterns to catch different cases
       const patterns = [
-        `**/*${query}*`,           // Files containing query anywhere in name
-        `**/*${query}*/**`,        // Directories containing query
+        `**/*${query}*`, // Files containing query anywhere in name
+        `**/*${query}*/**`, // Directories containing query
       ];
 
       const allUris: vscode.Uri[] = [];

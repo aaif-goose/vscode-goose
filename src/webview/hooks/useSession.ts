@@ -4,17 +4,17 @@
  */
 
 import { useCallback, useEffect, useReducer } from 'react';
-import { onMessage, postMessage } from '../bridge';
-import { SessionEntry, GroupedSessions, groupSessionsByDate } from '../../shared/sessionTypes';
 import {
   createCreateSessionMessage,
   createGetSessionsMessage,
   createSelectSessionMessage,
-  isSessionCreatedMessage,
-  isSessionsListMessage,
-  isSessionLoadedMessage,
   isHistoryCompleteMessage,
+  isSessionCreatedMessage,
+  isSessionLoadedMessage,
+  isSessionsListMessage,
 } from '../../shared/messages';
+import { GroupedSessions, groupSessionsByDate, SessionEntry } from '../../shared/sessionTypes';
+import { onMessage, postMessage } from '../bridge';
 
 interface SessionState {
   sessions: SessionEntry[];

@@ -2,9 +2,9 @@
  * Message types for webview-extension communication via postMessage.
  */
 
-import { ChatMessage, ProcessStatus } from './types';
-import { SessionEntry } from './sessionTypes';
 import { ContextChip, FileSearchResult } from './contextTypes';
+import { SessionEntry } from './sessionTypes';
+import { ChatMessage, ProcessStatus } from './types';
 
 /** Types of messages that can be sent between webview and extension */
 export enum WebviewMessageType {

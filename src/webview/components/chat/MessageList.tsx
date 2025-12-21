@@ -1,8 +1,8 @@
-import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { ChatMessage, MessageStatus } from '../../../shared/types';
-import { MessageItem } from './MessageItem';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
 import { GooseWatermark } from '../icons/GooseWatermark';
+import { MessageItem } from './MessageItem';
 
 interface MessageListProps {
   messages: readonly ChatMessage[];

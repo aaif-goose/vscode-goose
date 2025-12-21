@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  parseVersion,
   compareVersions,
-  meetsMinimumVersion,
   MINIMUM_VERSION,
+  meetsMinimumVersion,
+  parseVersion,
 } from './versionChecker';
 
 describe('parseVersion', () => {

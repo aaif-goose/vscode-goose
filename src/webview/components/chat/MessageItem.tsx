@@ -1,7 +1,7 @@
 import { ChatMessage, MessageRole } from '../../../shared/types';
-import { UserMessage } from './UserMessage';
 import { AssistantMessage } from './AssistantMessage';
 import { ErrorMessage } from './ErrorMessage';
+import { UserMessage } from './UserMessage';
 
 interface MessageItemProps {
   message: ChatMessage;
