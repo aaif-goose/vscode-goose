@@ -1,119 +1,92 @@
-# Goose - VS Code Extension
+# Goose for VS Code
 
-[Goose](https://block.github.io/goose/) is an open-source, on-device AI agent that runs locally, works with any LLM provider you configure, and can autonomously tackle full-stack engineering tasks from debugging to deployment. By embedding Goose directly inside VS Code, this extension lets you ask questions, refactor code, generate tests, or spin up entire features without ever leaving your editor. Keep your code in your editor, choose the model that suits you, and let Goose handle the heavy lifting so you can stay in flow
+Bring [Goose](https://block.github.io/goose/)—the open-source, on-device AI agent—directly into your editor. Chat with Goose, reference your code, and let it handle full-stack engineering tasks without ever leaving VS Code.
 
 ![Screenshot](./resources/screenshot.png)
 
-## ⚠️ Experimental Features Notice ⚠️
+> **Note:** This extension is under active development. Some features may change as we continue to improve the experience. We appreciate your feedback!
 
-Please be aware that this extension is under active development. Some features, especially those related to how information (like code context) is processed and sent to the AI, are experimental and may undergo significant changes. We appreciate your understanding and feedback as we work to stabilize and improve these functionalities.
+## Features
 
-## Current Features
+### Chat with Context
+Ask Goose questions about your code with full file context. Select code in your editor and send it to Goose with a single keystroke, or type `@` to search and attach any file from your workspace.
 
-* Interactive chat UI
-* Access to Goose's AI capabilities directly within VS Code
-* Support for coding assistance, explanations, and more
-* Unified session switching
-* Code referencing with visual chips in the chat UI
-* Quick actions for common coding tasks
-* Clipboard tools to copy code snippets/responses for easy sharing
-* Keyboard shortcuts for improved productivity (cmd+opt+g / ctrl+alt+g by default for sending code to Goose; configurable)
+### Context Chips
+Attach multiple files or code selections to your messages. Visual chips show exactly what context Goose sees, with support for both entire files and specific line ranges.
 
-## Coming Soon
+### Session Management
+Pick up where you left off. Your conversations persist across VS Code sessions with full history—browse past chats organized by time and switch between sessions instantly.
 
-* Smart Auto-fix loop (Let Goose automatically fix it's own mistakes based on VS Code diagnostics)
-* Code action suggestions for diagnostics and terminal output
-* Diff views for code changes
+### Streaming Responses
+See Goose think in real-time. Responses stream token-by-token with syntax-highlighted code blocks and one-click copy.
 
 ## Requirements
 
-> ⚠️ **VS Code 1.95.0 or higher is required** for this extension to function properly.
-
-> ⚠️ **Goose Desktop must be installed** before using this extension.
-👉 Install Goose Desktop from [here](https://block.github.io/goose/)
+- **VS Code 1.95.0+**
+- **Goose Desktop 1.16.0+** — [Install Goose](https://block.github.io/goose/)
 
 ## Installation
 
-There are two ways to install the Goose VS Code Extension:
+### From VS Code Marketplace (Recommended)
 
-### Method 1: Install from VS Code Marketplace (recommended)
-[Install from Market Place](https://marketplace.visualstudio.com/items?itemName=block.vscode-goose)
+[Install from Marketplace](https://marketplace.visualstudio.com/items?itemName=block.vscode-goose)
 
-### Method 2: Install from GitHub Releases
+### From GitHub Releases
 
-1. Go to the [GitHub Releases page](https://github.com/block/vscode-goose/releases)
-2. Find the latest release with the tag `vscode-v*`
-3. Download the `.vsix` file
-4. In VS Code, go to the Extensions view (Ctrl+Shift+X)
-5. Click on the "..." menu at the top of the Extensions view
-6. Select "Install from VSIX..."
-7. Locate and select the downloaded `.vsix` file
-8. Restart VS Code if prompted
+1. Download the `.vsix` from [Releases](https://github.com/block/vscode-goose/releases)
+2. In VS Code: Extensions → `...` menu → Install from VSIX...
 
-### Chat Interface
+## Quick Start
 
-The Goose chat interface appears in the sidebar activity bar. Click the Goose icon to open the chat panel.
+1. Click the Goose icon in the Activity Bar
+2. Start typing your question
+3. Use `@` to attach files or <kbd>Cmd+Shift+G</kbd> to send selected code
 
-### Code References
+## Usage
 
-You can reference code from your editor in your conversations with Goose:
+### Send Code to Goose
 
-1. Select code in your editor (or don't select anything to use the entire file)
-2. Right-click and choose "Ask Goose about this code" or use the keyboard shortcut <kbd>Ctrl+Alt+G</kbd> (<kbd>Cmd+Option+G</kbd> on macOS)
-3. The chat input will be automatically focused, allowing you to immediately start typing your question
+Select code in your editor and press <kbd>Cmd+Shift+G</kbd> (macOS) or <kbd>Ctrl+Shift+G</kbd> (Windows/Linux). You can also right-click and choose **Send to Goose**.
 
-The behavior varies based on how much code is selected:
+- **No selection**: Sends the entire file as context
+- **Small selection** (<100 lines): Included inline with your message
+- **Large selection** (≥100 lines): Added as a context chip
 
-* **No selection:** The entire active file is sent as a reference chip
-* **Small selections (< 100 lines):** The selected code is automatically included inline with your message
-* **Large selections (≥ 100 lines):** The code is added as a reference chip above the input box
+### Attach Files with @ Mentions
 
-This adaptive approach provides the best experience for different code sizes.
+Type `@` in the chat input to search your workspace. Select a file to add it as a context chip—Goose will see the full file contents.
 
-### Quick Actions
+### Manage Sessions
 
-The extension currently provides the following quick action command that can be accessed by right-clicking on selected code:
+- **New Chat**: Start a fresh conversation
+- **History**: Browse and resume past sessions grouped by Today, Yesterday, and older
 
-* **Ask Goose about this code** - General question about the selected code
+## Keyboard Shortcuts
 
-### Keyboard Shortcuts
+| Action | macOS | Windows/Linux |
+|--------|-------|---------------|
+| Send selection to Goose | <kbd>Cmd+Shift+G</kbd> | <kbd>Ctrl+Shift+G</kbd> |
 
-| Command                       | Shortcut (Windows/Linux) | Shortcut (macOS)        |
-| ----------------------------- | ------------------------ | ----------------------- |
-| Ask Goose about selected code | <kbd>Ctrl+Alt+G</kbd>    | <kbd>Cmd+Option+G</kbd> |
+## Configuration
 
-## Extension Settings
+| Setting | Description |
+|---------|-------------|
+| `goose.binaryPath` | Path to Goose binary (auto-detected by default) |
+| `goose.logLevel` | Logging level: `error`, `warn`, `info`, `debug` |
 
-This extension contributes the following settings:
+Goose reads its provider and model configuration from:
+- **macOS/Linux**: `~/.config/goose/config.yaml`
+- **Windows**: `%APPDATA%\Block\goose\config\config.yaml`
 
-* `goose.enable`: enable/disable this extension
+## Commands
 
-## Configuration File Location
-
-Goose's CLI and this extension look for a configuration file containing
-`GOOSE_PROVIDER` and `GOOSE_MODEL` values. The default locations are:
-
-* **Linux/macOS:** `~/.config/goose/config.yaml`
-* **Windows:** `%APPDATA%\Block\goose\config\config.yaml` (e.g. `C:\Users\<you>\AppData\Roaming\Block\goose\config\config.yaml`)
-
-Ensure this file exists and is populated with valid values before starting the extension.
-
-----
+- **Goose: Show Logs** — View extension logs
+- **Goose: Restart** — Restart the Goose connection
 
 ## Support
 
-For support, bug reports, or feature suggestions, please use [GitHub Issues](https://github.com/block/vscode-goose/issues).
-
-
-## Architecture
-
-Detailed information about the extension's architecture can be found in [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
-
-## Development
-
-Information for developers contributing to this extension can be found in [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md).
+Questions or issues? Open an issue on [GitHub](https://github.com/block/vscode-goose/issues).
 
 ## License
 
-This extension is licensed under Apache-2.0.
-See the [LICENSE](./LICENSE) file for details.
+Apache-2.0 — see [LICENSE](./LICENSE)
