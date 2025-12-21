@@ -68,7 +68,7 @@ jobs:
           VERSION="${{ steps.release.outputs.tag_name }}"
           VERSION="${VERSION#vscode-v}"  # Remove vscode-v prefix
           PACKAGE_FILENAME="dist/vscode-goose-${VERSION}.vsix"
-          npx @vscode/vsce package --no-yarn -o "$PACKAGE_FILENAME"
+          npx @vscode/vsce package --no-yarn --no-dependencies -o "$PACKAGE_FILENAME"
           if [ ! -f "$PACKAGE_FILENAME" ]; then
             echo "Failed to create the VSIX package: $PACKAGE_FILENAME"
             exit 1
