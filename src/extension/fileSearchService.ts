@@ -84,34 +84,10 @@ export function createFileSearchService(logger: Logger): FileSearchService {
 
     logger.debug(`Searching files with query: ${query}`);
 
-    let uris: vscode.Uri[];
-
-    if (query) {
-      // When there's a query, use glob pattern to let VS Code search more efficiently
-      // Try multiple patterns to catch different cases
-      const patterns = [
-        `**/*${query}*`, // Files containing query anywhere in name
-        `**/*${query}*/**`, // Directories containing query
-      ];
-
-      const allUris: vscode.Uri[] = [];
-      for (const pattern of patterns) {
-        const found = await vscode.workspace.findFiles(pattern, exclude, 500);
-        allUris.push(...found);
-      }
-
-      // Deduplicate by path
-      const seen = new Set<string>();
-      uris = allUris.filter(uri => {
-        if (seen.has(uri.fsPath)) return false;
-        seen.add(uri.fsPath);
-        return true;
-      });
-    } else {
-      // No query: fetch a large sample of files for initial display
-      // Use a high limit to ensure good coverage of subdirectories
-      uris = await vscode.workspace.findFiles('**/*', exclude, 10000);
-    }
+    // Always fetch all files and filter in-memory for case-insensitive search.
+    // Glob patterns are case-sensitive on most platforms, so we cannot rely on
+    // them to match e.g. "readme" to "README.md".
+    const uris = await vscode.workspace.findFiles('**/*', exclude, 10000);
 
     let results: FileSearchResult[] = uris.map(uri => {
       const fileName = path.basename(uri.fsPath);
@@ -128,10 +104,14 @@ export function createFileSearchService(logger: Logger): FileSearchService {
       };
     });
 
-    // Additional case-insensitive filtering when query is provided
-    // (glob patterns may be case-sensitive on some platforms)
+    // Case-insensitive filtering when query is provided.
+    // Matches against both file name and relative path for flexible search.
     if (query) {
-      results = results.filter(r => r.fileName.toLowerCase().includes(lowerQuery));
+      results = results.filter(r => {
+        const lowerFileName = r.fileName.toLowerCase();
+        const lowerRelativePath = r.relativePath.toLowerCase();
+        return lowerFileName.includes(lowerQuery) || lowerRelativePath.includes(lowerQuery);
+      });
     }
 
     // Sort by recent score descending (most recently opened first)
