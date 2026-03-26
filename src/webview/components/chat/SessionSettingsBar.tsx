@@ -219,7 +219,7 @@ export function SessionSettingsBar({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-nowrap items-center gap-1.5 overflow-hidden">
       {settings.mode && (
         <SettingMenu
           setting={settings.mode}

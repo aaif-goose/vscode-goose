@@ -232,8 +232,8 @@ export function InputArea({
             aria-label="Message input"
           />
         </div>
-        <div className="mt-2 flex items-end justify-between gap-2">
-          <div className="min-w-0 flex-1">
+        <div className="mt-2 flex flex-nowrap items-end justify-between gap-2">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <SessionSettingsBar
               settings={settings}
               disabled={disabled || isGenerating}
