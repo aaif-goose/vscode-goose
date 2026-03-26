@@ -3,17 +3,17 @@
  * Manages activation, subprocess lifecycle, and webview registration.
  */
 
-import * as E from 'fp-ts/Either';
-import * as fs from 'fs/promises';
-import * as vscode from 'vscode';
 import {
   AGENT_METHODS,
-  PROTOCOL_VERSION,
   type ContentBlock,
   type InitializeResponse,
+  PROTOCOL_VERSION,
   type PromptResponse,
   type SessionNotification,
 } from '@agentclientprotocol/sdk';
+import * as E from 'fp-ts/Either';
+import * as fs from 'fs/promises';
+import * as vscode from 'vscode';
 import {
   formatError,
   isBinaryNotFoundError,
@@ -38,10 +38,10 @@ import {
   isFileSearchMessage,
   isGetSessionsMessage,
   isOpenExternalLinkMessage,
-  isSetSessionModeMessage,
-  isSetSessionModelMessage,
   isSelectSessionMessage,
   isSendMessageMessage,
+  isSetSessionModelMessage,
+  isSetSessionModeMessage,
   isStopGenerationMessage,
 } from '../shared/messages';
 import { DEFAULT_CAPABILITIES, SessionEntry } from '../shared/sessionTypes';

@@ -23,14 +23,14 @@ import { createJsonRpcError, GooseError } from '../shared/errors';
 import {
   AgentCapabilities,
   DEFAULT_CAPABILITIES,
-  GroupedSessions,
   EMPTY_SESSION_SETTINGS,
+  GroupedSessions,
   generateSessionTitle,
   groupSessionsByDate,
   SessionEntry,
   SessionSelectSetting,
-  SessionSettingsState,
   SessionSettingOption,
+  SessionSettingsState,
 } from '../shared/sessionTypes';
 import { ChatMessage, JsonRpcNotification, MessageRole, MessageStatus } from '../shared/types';
 import { JsonRpcClient } from './jsonRpcClient';
@@ -85,9 +85,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   };
 
   const flattenOptions = (
-    options:
-      | readonly SessionConfigSelectOption[]
-      | readonly SessionConfigSelectGroup[]
+    options: readonly SessionConfigSelectOption[] | readonly SessionConfigSelectGroup[]
   ): SessionSettingOption[] => {
     if (options.length === 0) return [];
     if ('group' in options[0]) {

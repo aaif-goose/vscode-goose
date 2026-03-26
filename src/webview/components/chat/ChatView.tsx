@@ -1,6 +1,6 @@
-import { SessionSettingsState } from '../../../shared/sessionTypes';
 import { useCallback, useRef } from 'react';
 import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
+import { SessionSettingsState } from '../../../shared/sessionTypes';
 import { UseChatReturn } from '../../hooks/useChat';
 import { UseContextChipsReturn } from '../../hooks/useContextChips';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
