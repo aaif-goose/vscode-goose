@@ -8,7 +8,6 @@ interface MessageListProps {
   messages: readonly ChatMessage[];
   isGenerating: boolean;
   focusedIndex: number | null;
-  onMessageFocus: (index: number) => void;
   onRetry: (content: string) => void;
 }
 
@@ -17,7 +16,7 @@ export interface MessageListHandle {
 }
 
 export const MessageList = forwardRef<MessageListHandle, MessageListProps>(function MessageList(
-  { messages, isGenerating, focusedIndex, onMessageFocus, onRetry },
+  { messages, isGenerating, focusedIndex, onRetry },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -72,7 +71,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
       aria-live="polite"
       aria-label="Chat messages"
     >
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-5">
         {messages.map((message, index) => (
           <div
             key={message.id}
@@ -88,7 +87,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
               message={message}
               isFocused={focusedIndex === index}
               isStreaming={isGenerating && message.status === MessageStatus.STREAMING}
-              onFocus={() => onMessageFocus(index)}
               onRetry={onRetry}
             />
           </div>
