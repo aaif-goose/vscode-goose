@@ -80,7 +80,6 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
           ...state.sessions.filter(s => s.sessionId !== action.payload.sessionId),
         ],
         activeSessionId: action.payload.sessionId,
-        isPanelOpen: false,
       };
 
     case 'TOGGLE_PANEL':
@@ -172,7 +171,6 @@ export function useSession(): UseSessionReturn {
           type: 'SET_HISTORY_UNAVAILABLE',
           payload: message.payload.historyUnavailable ?? false,
         });
-        dispatch({ type: 'CLOSE_PANEL' });
       } else if (isHistoryCompleteMessage(message)) {
         dispatch({ type: 'SET_LOADING_HISTORY', payload: false });
       } else if (isSessionSettingsMessage(message)) {
