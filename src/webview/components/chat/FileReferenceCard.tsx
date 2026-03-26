@@ -48,20 +48,20 @@ export function FileReferenceCard({ reference }: FileReferenceCardProps) {
           <ChevronIcon expanded={isExpanded} className="w-3 h-3 flex-shrink-0 opacity-70" />
         )}
         <FileTypeIcon languageId={languageId} className="w-4 h-4 flex-shrink-0" />
-          <span className="font-medium truncate">
-            {fileName}
-            {reference.lineRange && (
-              <span className="text-[var(--vscode-descriptionForeground)]">
-                :{reference.lineRange.startLine}-{reference.lineRange.endLine}
-              </span>
-            )}
-          </span>
-          {/* Show directory path only when collapsed */}
-          {!isExpanded && (
-            <span className="min-w-0 truncate text-xs text-[var(--vscode-descriptionForeground)]">
-              {getDirectoryPath(filePath)}
+        <span className="font-medium truncate">
+          {fileName}
+          {reference.lineRange && (
+            <span className="text-[var(--vscode-descriptionForeground)]">
+              :{reference.lineRange.startLine}-{reference.lineRange.endLine}
             </span>
           )}
+        </span>
+        {/* Show directory path only when collapsed */}
+        {!isExpanded && (
+          <span className="min-w-0 truncate text-xs text-[var(--vscode-descriptionForeground)]">
+            {getDirectoryPath(filePath)}
+          </span>
+        )}
       </button>
 
       {/* Expanded content */}

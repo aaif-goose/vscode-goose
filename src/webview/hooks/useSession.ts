@@ -7,9 +7,9 @@ import { useCallback, useEffect, useReducer } from 'react';
 import {
   createCreateSessionMessage,
   createGetSessionsMessage,
-  createSetSessionModeMessage,
-  createSetSessionModelMessage,
   createSelectSessionMessage,
+  createSetSessionModelMessage,
+  createSetSessionModeMessage,
   isHistoryCompleteMessage,
   isSessionCreatedMessage,
   isSessionLoadedMessage,

@@ -10,6 +10,10 @@ interface ChatContainerProps {
 }
 
 export function ChatContainer({ className = '' }: ChatContainerProps) {
+  const noopSettingChange = useCallback((_value: string) => {
+    // Intentionally unused when session settings are hidden in this container.
+  }, []);
+
   const {
     messages,
     isGenerating,
@@ -48,7 +52,6 @@ export function ChatContainer({ className = '' }: ChatContainerProps) {
         messages={messages}
         isGenerating={isGenerating}
         focusedIndex={focusedIndex}
-        onMessageFocus={setFocusedIndex}
         onRetry={retryMessage}
       />
       <InputArea
@@ -59,8 +62,8 @@ export function ChatContainer({ className = '' }: ChatContainerProps) {
         isGenerating={isGenerating}
         disabled={false}
         settings={EMPTY_SESSION_SETTINGS}
-        onModeChange={() => {}}
-        onModelChange={() => {}}
+        onModeChange={noopSettingChange}
+        onModelChange={noopSettingChange}
       />
     </div>
   );
