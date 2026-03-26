@@ -24,11 +24,14 @@ export function App() {
     isLoading,
     isLoadingHistory,
     historyUnavailable,
+    settings,
     togglePanel,
     closePanel,
     selectSession,
     createSession,
     refreshSessions,
+    setSessionMode,
+    setSessionModel,
   } = useSession();
 
   // Keep useChat at App level so message handlers are always registered
@@ -121,7 +124,14 @@ export function App() {
               Session history is not available. Continue from where you left off.
             </div>
           )}
-          <ChatView className="flex-1" chat={chat} contextChips={contextChips} />
+          <ChatView
+            className="flex-1"
+            chat={chat}
+            contextChips={contextChips}
+            settings={settings}
+            setSessionMode={setSessionMode}
+            setSessionModel={setSessionModel}
+          />
         </>
       )}
     </div>

@@ -28,6 +28,35 @@ export interface AgentCapabilities {
   };
 }
 
+/** Option value for a session setting selector. */
+export interface SessionSettingOption {
+  readonly value: string;
+  readonly name: string;
+  readonly description?: string;
+}
+
+/** Select-style session setting exposed by the ACP agent. */
+export interface SessionSelectSetting {
+  readonly id: string;
+  readonly label: string;
+  readonly category: 'mode' | 'model' | 'other';
+  readonly currentValue: string;
+  readonly options: readonly SessionSettingOption[];
+  readonly description?: string;
+}
+
+/** Session settings state surfaced to the webview for the active session. */
+export interface SessionSettingsState {
+  readonly mode: SessionSelectSetting | null;
+  readonly model: SessionSelectSetting | null;
+}
+
+/** Empty session settings state. */
+export const EMPTY_SESSION_SETTINGS: SessionSettingsState = {
+  mode: null,
+  model: null,
+};
+
 /** Session list grouped by date for UI */
 export interface GroupedSessions {
   readonly label: string;

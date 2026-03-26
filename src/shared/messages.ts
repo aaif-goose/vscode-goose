@@ -3,7 +3,7 @@
  */
 
 import { ContextChip, FileSearchResult } from './contextTypes';
-import { SessionEntry } from './sessionTypes';
+import { SessionEntry, SessionSettingsState } from './sessionTypes';
 import { ChatMessage, ProcessStatus } from './types';
 
 /** Types of messages that can be sent between webview and extension */
@@ -62,6 +62,12 @@ export enum WebviewMessageType {
   SEARCH_RESULTS = 'SEARCH_RESULTS',
   /** Extension requests focus on chat input */
   FOCUS_CHAT_INPUT = 'FOCUS_CHAT_INPUT',
+  /** Extension sends active session settings to webview */
+  SESSION_SETTINGS = 'SESSION_SETTINGS',
+  /** Webview requests changing the active session mode */
+  SET_SESSION_MODE = 'SET_SESSION_MODE',
+  /** Webview requests changing the active session model */
+  SET_SESSION_MODEL = 'SET_SESSION_MODEL',
 }
 
 // ============================================================================
@@ -214,6 +220,21 @@ export interface SearchResultsPayload {
 /** Payload for FOCUS_CHAT_INPUT message (empty) */
 export type FocusChatInputPayload = Record<string, never>;
 
+/** Payload for SESSION_SETTINGS message */
+export interface SessionSettingsPayload {
+  readonly settings: SessionSettingsState;
+}
+
+/** Payload for SET_SESSION_MODE message */
+export interface SetSessionModePayload {
+  readonly modeId: string;
+}
+
+/** Payload for SET_SESSION_MODEL message */
+export interface SetSessionModelPayload {
+  readonly modelId: string;
+}
+
 // ============================================================================
 // Message Type Mapping
 // ============================================================================
@@ -247,6 +268,9 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.FILE_SEARCH]: FileSearchPayload;
   [WebviewMessageType.SEARCH_RESULTS]: SearchResultsPayload;
   [WebviewMessageType.FOCUS_CHAT_INPUT]: FocusChatInputPayload;
+  [WebviewMessageType.SESSION_SETTINGS]: SessionSettingsPayload;
+  [WebviewMessageType.SET_SESSION_MODE]: SetSessionModePayload;
+  [WebviewMessageType.SET_SESSION_MODEL]: SetSessionModelPayload;
 }
 
 /** Generic webview message with typed payload */
@@ -530,6 +554,36 @@ export function createFocusChatInputMessage(): WebviewMessage<WebviewMessageType
   };
 }
 
+/** Create a SESSION_SETTINGS message */
+export function createSessionSettingsMessage(
+  settings: SessionSettingsState
+): WebviewMessage<WebviewMessageType.SESSION_SETTINGS> {
+  return {
+    type: WebviewMessageType.SESSION_SETTINGS,
+    payload: { settings },
+  };
+}
+
+/** Create a SET_SESSION_MODE message */
+export function createSetSessionModeMessage(
+  modeId: string
+): WebviewMessage<WebviewMessageType.SET_SESSION_MODE> {
+  return {
+    type: WebviewMessageType.SET_SESSION_MODE,
+    payload: { modeId },
+  };
+}
+
+/** Create a SET_SESSION_MODEL message */
+export function createSetSessionModelMessage(
+  modelId: string
+): WebviewMessage<WebviewMessageType.SET_SESSION_MODEL> {
+  return {
+    type: WebviewMessageType.SET_SESSION_MODEL,
+    payload: { modelId },
+  };
+}
+
 // ============================================================================
 // Type Guards
 // ============================================================================
@@ -719,4 +773,25 @@ export function isFocusChatInputMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.FOCUS_CHAT_INPUT> {
   return isWebviewMessage(message, WebviewMessageType.FOCUS_CHAT_INPUT);
+}
+
+/** Check if message is SESSION_SETTINGS */
+export function isSessionSettingsMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SESSION_SETTINGS> {
+  return isWebviewMessage(message, WebviewMessageType.SESSION_SETTINGS);
+}
+
+/** Check if message is SET_SESSION_MODE */
+export function isSetSessionModeMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SET_SESSION_MODE> {
+  return isWebviewMessage(message, WebviewMessageType.SET_SESSION_MODE);
+}
+
+/** Check if message is SET_SESSION_MODEL */
+export function isSetSessionModelMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SET_SESSION_MODEL> {
+  return isWebviewMessage(message, WebviewMessageType.SET_SESSION_MODEL);
 }

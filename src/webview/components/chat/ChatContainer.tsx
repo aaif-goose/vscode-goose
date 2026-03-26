@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { EMPTY_SESSION_SETTINGS } from '../../../shared/sessionTypes';
 import { useChat } from '../../hooks/useChat';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
 import { InputArea } from './InputArea';
@@ -57,6 +58,9 @@ export function ChatContainer({ className = '' }: ChatContainerProps) {
         onStop={stopGeneration}
         isGenerating={isGenerating}
         disabled={false}
+        settings={EMPTY_SESSION_SETTINGS}
+        onModeChange={() => {}}
+        onModelChange={() => {}}
       />
     </div>
   );

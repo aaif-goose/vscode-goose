@@ -5,8 +5,10 @@ import { onMessage } from '../../bridge';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import { FilePicker } from '../picker/FilePicker';
 import { ChipStack } from './ChipStack';
+import { SessionSettingsBar } from './SessionSettingsBar';
 import { SendButton } from './SendButton';
 import { StopButton } from './StopButton';
+import { SessionSettingsState } from '../../../shared/sessionTypes';
 
 interface InputAreaProps {
   value: string;
@@ -22,6 +24,9 @@ interface InputAreaProps {
   onClearChips?: () => void;
   onAddFileChip?: (result: FileSearchResult) => void;
   chipAnnouncement?: string | null;
+  settings: SessionSettingsState;
+  onModeChange: (modeId: string) => void;
+  onModelChange: (modelId: string) => void;
 }
 
 const MAX_HEIGHT = 200;
@@ -42,6 +47,9 @@ export function InputArea({
   onClearChips,
   onAddFileChip,
   chipAnnouncement = null,
+  settings,
+  onModeChange,
+  onModelChange,
 }: InputAreaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -229,6 +237,12 @@ export function InputArea({
           <SendButton onClick={handleSend} disabled={!canSend} />
         )}
       </div>
+      <SessionSettingsBar
+        settings={settings}
+        disabled={disabled || isGenerating}
+        onModeChange={onModeChange}
+        onModelChange={onModelChange}
+      />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { SessionSettingsState } from '../../../shared/sessionTypes';
 import { useCallback, useRef } from 'react';
 import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
 import { UseChatReturn } from '../../hooks/useChat';
@@ -10,9 +11,19 @@ interface ChatViewProps {
   className?: string;
   chat: UseChatReturn;
   contextChips: UseContextChipsReturn;
+  settings: SessionSettingsState;
+  setSessionMode: (modeId: string) => void;
+  setSessionModel: (modelId: string) => void;
 }
 
-export function ChatView({ className = '', chat, contextChips }: ChatViewProps) {
+export function ChatView({
+  className = '',
+  chat,
+  contextChips,
+  settings,
+  setSessionMode,
+  setSessionModel,
+}: ChatViewProps) {
   const {
     messages,
     isGenerating,
@@ -100,6 +111,9 @@ export function ChatView({ className = '', chat, contextChips }: ChatViewProps) 
         onClearChips={clearChips}
         onAddFileChip={handleAddFileChip}
         chipAnnouncement={chipAnnouncement}
+        settings={settings}
+        onModeChange={setSessionMode}
+        onModelChange={setSessionModel}
       />
     </div>
   );

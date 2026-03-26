@@ -23,12 +23,15 @@ import {
   createSearchResultsMessage,
   createSessionCreatedMessage,
   createSessionLoadedMessage,
+  createSessionSettingsMessage,
   createSessionsListMessage,
   createStreamTokenMessage,
   isCreateSessionMessage,
   isFileSearchMessage,
   isGetSessionsMessage,
   isOpenExternalLinkMessage,
+  isSetSessionModeMessage,
+  isSetSessionModelMessage,
   isSelectSessionMessage,
   isSendMessageMessage,
   isStopGenerationMessage,
@@ -390,6 +393,10 @@ function setupAcpCommunication(
     provider.postMessage(createHistoryCompleteMessage(sessionId, messageCount));
   });
 
+  manager.onSettingsChange(settings => {
+    provider.postMessage(createSessionSettingsMessage(settings));
+  });
+
   provider.onMessage(message => {
     if (isSendMessageMessage(message)) {
       const { content, responseId, contextChips } = message.payload;
@@ -473,6 +480,7 @@ function setupAcpCommunication(
             provider.postMessage(
               createSessionsListMessage(manager.getSessions(), result.right.sessionId)
             );
+            provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
             log.info(`New session created: ${result.right.sessionId}`);
           } else {
             log.error('Failed to create session:', result.left);
@@ -488,6 +496,7 @@ function setupAcpCommunication(
       provider.postMessage(
         createSessionsListMessage(manager.getSessions(), manager.getActiveSessionId())
       );
+      provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
     }
 
     if (isSelectSessionMessage(message)) {
@@ -505,10 +514,35 @@ function setupAcpCommunication(
               createSessionLoadedMessage(sessionId, !manager.hasLoadSessionCapability())
             );
             provider.postMessage(createSessionsListMessage(manager.getSessions(), sessionId));
+            provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
             log.info(`Session loaded: ${sessionId}`);
           } else {
             log.error('Failed to load session:', result.left);
             provider.postMessage(createErrorMessage('Session Load Failed', result.left.message));
+          }
+        });
+    }
+
+    if (isSetSessionModeMessage(message)) {
+      const { modeId } = message.payload;
+      manager
+        .setSessionMode(modeId)()
+        .then(result => {
+          if (E.isLeft(result)) {
+            log.error('Failed to set session mode:', result.left);
+            provider.postMessage(createErrorMessage('Mode Update Failed', result.left.message));
+          }
+        });
+    }
+
+    if (isSetSessionModelMessage(message)) {
+      const { modelId } = message.payload;
+      manager
+        .setSessionModel(modelId)()
+        .then(result => {
+          if (E.isLeft(result)) {
+            log.error('Failed to set session model:', result.left);
+            provider.postMessage(createErrorMessage('Model Update Failed', result.left.message));
           }
         });
     }

@@ -10,9 +10,13 @@ import {
   AgentCapabilities,
   DEFAULT_CAPABILITIES,
   GroupedSessions,
+  EMPTY_SESSION_SETTINGS,
   generateSessionTitle,
   groupSessionsByDate,
   SessionEntry,
+  SessionSelectSetting,
+  SessionSettingsState,
+  SessionSettingOption,
 } from '../shared/sessionTypes';
 import { ChatMessage, JsonRpcNotification, MessageRole, MessageStatus } from '../shared/types';
 import { JsonRpcClient } from './jsonRpcClient';
@@ -21,10 +25,65 @@ import { SessionStorage } from './sessionStorage';
 
 interface AcpSessionNewResponse {
   readonly sessionId: string;
+  readonly modes?: AcpSessionModeState | null;
+  readonly models?: AcpSessionModelState | null;
+  readonly configOptions?: AcpSessionConfigOption[] | null;
 }
 
 interface AcpSessionLoadResponse {
   readonly success?: boolean;
+  readonly modes?: AcpSessionModeState | null;
+  readonly models?: AcpSessionModelState | null;
+  readonly configOptions?: AcpSessionConfigOption[] | null;
+}
+
+interface AcpSessionMode {
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string | null;
+}
+
+interface AcpSessionModeState {
+  readonly currentModeId: string;
+  readonly availableModes: readonly AcpSessionMode[];
+}
+
+interface AcpSessionModel {
+  readonly modelId: string;
+  readonly name: string;
+  readonly description?: string | null;
+}
+
+interface AcpSessionModelState {
+  readonly currentModelId: string;
+  readonly availableModels: readonly AcpSessionModel[];
+}
+
+interface AcpSessionConfigSelectOption {
+  readonly value: string;
+  readonly name: string;
+  readonly description?: string | null;
+}
+
+interface AcpSessionConfigSelectGroup {
+  readonly group: string;
+  readonly name: string;
+  readonly options: readonly AcpSessionConfigSelectOption[];
+}
+
+interface AcpSessionConfigSelect {
+  readonly type: 'select';
+  readonly currentValue: string;
+  readonly options:
+    | readonly AcpSessionConfigSelectOption[]
+    | readonly AcpSessionConfigSelectGroup[];
+}
+
+interface AcpSessionConfigOption extends AcpSessionConfigSelect {
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string | null;
+  readonly category?: string | null;
 }
 
 /** ContentBlock types from ACP */
@@ -57,6 +116,9 @@ interface AcpSessionUpdateParams {
   readonly update: {
     readonly sessionUpdate: string;
     readonly content?: AcpContentBlock;
+    readonly currentModeId?: string;
+    readonly optionId?: string;
+    readonly currentValue?: string;
   };
 }
 
@@ -72,11 +134,15 @@ export interface SessionManager {
   getSessions(): readonly SessionEntry[];
   getActiveSession(): SessionEntry | null;
   getActiveSessionId(): string | null;
+  getSessionSettings(): SessionSettingsState;
   updateSessionTitle(sessionId: string, title: string): Promise<void>;
+  setSessionMode(modeId: string): TE.TaskEither<GooseError, void>;
+  setSessionModel(modelId: string): TE.TaskEither<GooseError, void>;
   hasLoadSessionCapability(): boolean;
   hasEmbeddedContextCapability(): boolean;
   onHistoryMessage(callback: (message: ChatMessage) => void): () => void;
   onHistoryComplete(callback: (sessionId: string, messageCount: number) => void): () => void;
+  onSettingsChange(callback: (settings: SessionSettingsState) => void): () => void;
   dispose(): void;
 }
 
@@ -84,8 +150,121 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   let client: JsonRpcClient | null = null;
   let capabilities: AgentCapabilities = DEFAULT_CAPABILITIES;
   let workingDirectory = '';
+  let sessionSettings: SessionSettingsState = EMPTY_SESSION_SETTINGS;
   const historyMessageCallbacks: ((message: ChatMessage) => void)[] = [];
   const historyCompleteCallbacks: ((sessionId: string, messageCount: number) => void)[] = [];
+  const settingsChangeCallbacks: ((settings: SessionSettingsState) => void)[] = [];
+
+  const flattenOptions = (
+    options:
+      | readonly AcpSessionConfigSelectOption[]
+      | readonly AcpSessionConfigSelectGroup[]
+  ): SessionSettingOption[] => {
+    if (options.length === 0) return [];
+    if ('group' in options[0]) {
+      return (options as readonly AcpSessionConfigSelectGroup[]).flatMap(group =>
+        group.options.map(option => ({
+          value: option.value,
+          name: option.name,
+          description: option.description ?? undefined,
+        }))
+      );
+    }
+    return (options as readonly AcpSessionConfigSelectOption[]).map(option => ({
+      value: option.value,
+      name: option.name,
+      description: option.description ?? undefined,
+    }));
+  };
+
+  const normalizeSettings = (
+    modes?: AcpSessionModeState | null,
+    models?: AcpSessionModelState | null,
+    configOptions?: readonly AcpSessionConfigOption[] | null
+  ): SessionSettingsState => {
+    const mode: SessionSelectSetting | null =
+      modes && modes.availableModes.length > 0
+        ? {
+            id: 'session-mode',
+            label: 'Mode',
+            category: 'mode',
+            currentValue: modes.currentModeId,
+            options: modes.availableModes.map(option => ({
+              value: option.id,
+              name: option.name,
+              description: option.description ?? undefined,
+            })),
+          }
+        : null;
+
+    const configModel = configOptions?.find(
+      option => option.type === 'select' && option.category === 'model'
+    );
+
+    const model: SessionSelectSetting | null = models
+      ? {
+          id: 'session-model',
+          label: 'Model',
+          category: 'model',
+          currentValue: models.currentModelId,
+          options: models.availableModels.map(option => ({
+            value: option.modelId,
+            name: option.name,
+            description: option.description ?? undefined,
+          })),
+        }
+      : configModel
+        ? {
+            id: configModel.id,
+            label: configModel.name,
+            category: 'model',
+            currentValue: configModel.currentValue,
+            options: flattenOptions(configModel.options),
+            description: configModel.description ?? undefined,
+          }
+        : null;
+
+    return { mode, model };
+  };
+
+  const emitSettingsChange = (): void => {
+    for (const callback of settingsChangeCallbacks) {
+      callback(sessionSettings);
+    }
+  };
+
+  const setSessionSettings = (
+    modes?: AcpSessionModeState | null,
+    models?: AcpSessionModelState | null,
+    configOptions?: readonly AcpSessionConfigOption[] | null
+  ): void => {
+    sessionSettings = normalizeSettings(modes, models, configOptions);
+    emitSettingsChange();
+  };
+
+  const updateCurrentMode = (modeId: string): void => {
+    if (!sessionSettings.mode) return;
+    sessionSettings = {
+      ...sessionSettings,
+      mode: {
+        ...sessionSettings.mode,
+        currentValue: modeId,
+      },
+    };
+    emitSettingsChange();
+  };
+
+  const updateCurrentModel = (value: string): void => {
+    if (!sessionSettings.model) return;
+    sessionSettings = {
+      ...sessionSettings,
+      model: {
+        ...sessionSettings.model,
+        currentValue: value,
+      },
+    };
+    emitSettingsChange();
+  };
 
   const generateId = (): string => {
     return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -124,6 +303,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
 
         storage.addSession(session);
         storage.setActiveSession(session.sessionId);
+        setSessionSettings(response.modes, response.models, response.configOptions);
 
         logger.info(`Created session: ${session.sessionId}`);
         return session;
@@ -159,6 +339,23 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
       if (!params?.update) return;
 
       const { sessionUpdate, content } = params.update;
+      if (params.sessionId !== sessionId) return;
+
+      if (sessionUpdate === 'current_mode_update' && params.update.currentModeId) {
+        updateCurrentMode(params.update.currentModeId);
+        return;
+      }
+
+      if (
+        sessionUpdate === 'config_option_update' &&
+        params.update.currentValue &&
+        sessionSettings.model &&
+        params.update.optionId === sessionSettings.model.id
+      ) {
+        updateCurrentModel(params.update.currentValue);
+        return;
+      }
+
       if (!content) return;
 
       const role =
@@ -231,9 +428,10 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
         cwd: session.cwd,
         mcpServers: [],
       }),
-      TE.map(() => {
+      TE.map(response => {
         isLoadingSession = false;
         storage.setActiveSession(sessionId);
+        setSessionSettings(response.modes, response.models, response.configOptions);
         historyCompleteCallbacks.forEach(cb => cb(sessionId, messageCount));
         logger.info(`Loaded session: ${sessionId} with ${messageCount} messages`);
       }),
@@ -264,10 +462,76 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     return storage.getActiveSessionId();
   };
 
+  const getSessionSettings = (): SessionSettingsState => {
+    return sessionSettings;
+  };
+
   const updateSessionTitle = async (sessionId: string, title: string): Promise<void> => {
     const generatedTitle = generateSessionTitle(title);
     await storage.updateSessionTitle(sessionId, generatedTitle);
     logger.debug(`Updated session title: ${sessionId} -> ${generatedTitle}`);
+  };
+
+  const setSessionMode = (modeId: string): TE.TaskEither<GooseError, void> => {
+    if (!client) {
+      return TE.left(createJsonRpcError(-32000, 'Client not initialized'));
+    }
+
+    const activeSessionId = storage.getActiveSessionId();
+    if (!activeSessionId) {
+      return TE.left(createJsonRpcError(-32001, 'No active session'));
+    }
+
+    return pipe(
+      client.request<unknown>('session/set_mode', {
+        sessionId: activeSessionId,
+        modeId,
+      }),
+      TE.map(() => {
+        updateCurrentMode(modeId);
+        logger.info(`Updated session mode: ${modeId}`);
+      })
+    );
+  };
+
+  const setSessionModel = (modelId: string): TE.TaskEither<GooseError, void> => {
+    if (!client) {
+      return TE.left(createJsonRpcError(-32000, 'Client not initialized'));
+    }
+
+    const activeSessionId = storage.getActiveSessionId();
+    if (!activeSessionId) {
+      return TE.left(createJsonRpcError(-32001, 'No active session'));
+    }
+
+    if (sessionSettings.model?.id === 'session-model') {
+      return pipe(
+        client.request<unknown>('session/set_model', {
+          sessionId: activeSessionId,
+          modelId,
+        }),
+        TE.map(() => {
+          updateCurrentModel(modelId);
+          logger.info(`Updated session model: ${modelId}`);
+        })
+      );
+    }
+
+    if (sessionSettings.model) {
+      return pipe(
+        client.request<unknown>('session/set_config_option', {
+          sessionId: activeSessionId,
+          configId: sessionSettings.model.id,
+          value: modelId,
+        }),
+        TE.map(() => {
+          updateCurrentModel(modelId);
+          logger.info(`Updated session config model: ${modelId}`);
+        })
+      );
+    }
+
+    return TE.right(undefined);
   };
 
   const hasLoadSessionCapability = (): boolean => {
@@ -300,10 +564,21 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     };
   };
 
+  const onSettingsChange = (callback: (settings: SessionSettingsState) => void): (() => void) => {
+    settingsChangeCallbacks.push(callback);
+    return () => {
+      const index = settingsChangeCallbacks.indexOf(callback);
+      if (index > -1) {
+        settingsChangeCallbacks.splice(index, 1);
+      }
+    };
+  };
+
   const dispose = (): void => {
     client = null;
     historyMessageCallbacks.length = 0;
     historyCompleteCallbacks.length = 0;
+    settingsChangeCallbacks.length = 0;
     logger.debug('SessionManager disposed');
   };
 
@@ -315,11 +590,15 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     getSessions,
     getActiveSession,
     getActiveSessionId,
+    getSessionSettings,
     updateSessionTitle,
+    setSessionMode,
+    setSessionModel,
     hasLoadSessionCapability,
     hasEmbeddedContextCapability,
     onHistoryMessage,
     onHistoryComplete,
+    onSettingsChange,
     dispose,
   };
 }
