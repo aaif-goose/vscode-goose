@@ -111,6 +111,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "file:../acp-typescript-sdk",
     "fp-ts": "^2.16.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.1",

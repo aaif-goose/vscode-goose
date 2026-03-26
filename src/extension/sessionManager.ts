@@ -3,6 +3,20 @@
  * Coordinates between ACP client, session storage, and webview.
  */
 
+import {
+  AGENT_METHODS,
+  type ConfigOptionUpdate,
+  type ContentBlock,
+  type CurrentModeUpdate,
+  type LoadSessionResponse,
+  type NewSessionResponse,
+  type SessionConfigOption,
+  type SessionConfigSelectGroup,
+  type SessionConfigSelectOption,
+  type SessionModelState,
+  type SessionModeState,
+  type SessionNotification,
+} from '@agentclientprotocol/sdk';
 import { pipe } from 'fp-ts/function';
 import * as TE from 'fp-ts/TaskEither';
 import { createJsonRpcError, GooseError } from '../shared/errors';
@@ -23,104 +37,8 @@ import { JsonRpcClient } from './jsonRpcClient';
 import { Logger } from './logger';
 import { SessionStorage } from './sessionStorage';
 
-interface AcpSessionNewResponse {
-  readonly sessionId: string;
-  readonly modes?: AcpSessionModeState | null;
-  readonly models?: AcpSessionModelState | null;
-  readonly configOptions?: AcpSessionConfigOption[] | null;
-}
-
-interface AcpSessionLoadResponse {
-  readonly success?: boolean;
-  readonly modes?: AcpSessionModeState | null;
-  readonly models?: AcpSessionModelState | null;
-  readonly configOptions?: AcpSessionConfigOption[] | null;
-}
-
-interface AcpSessionMode {
-  readonly id: string;
-  readonly name: string;
-  readonly description?: string | null;
-}
-
-interface AcpSessionModeState {
-  readonly currentModeId: string;
-  readonly availableModes: readonly AcpSessionMode[];
-}
-
-interface AcpSessionModel {
-  readonly modelId: string;
-  readonly name: string;
-  readonly description?: string | null;
-}
-
-interface AcpSessionModelState {
-  readonly currentModelId: string;
-  readonly availableModels: readonly AcpSessionModel[];
-}
-
-interface AcpSessionConfigSelectOption {
-  readonly value: string;
-  readonly name: string;
-  readonly description?: string | null;
-}
-
-interface AcpSessionConfigSelectGroup {
-  readonly group: string;
-  readonly name: string;
-  readonly options: readonly AcpSessionConfigSelectOption[];
-}
-
-interface AcpSessionConfigSelect {
-  readonly type: 'select';
-  readonly currentValue: string;
-  readonly options:
-    | readonly AcpSessionConfigSelectOption[]
-    | readonly AcpSessionConfigSelectGroup[];
-}
-
-interface AcpSessionConfigOption extends AcpSessionConfigSelect {
-  readonly id: string;
-  readonly name: string;
-  readonly description?: string | null;
-  readonly category?: string | null;
-}
-
-/** ContentBlock types from ACP */
-interface AcpTextContent {
-  readonly type: 'text';
-  readonly text: string;
-}
-
-interface AcpResourceLinkContent {
-  readonly type: 'resource_link';
-  readonly uri: string;
-  readonly name: string;
-  readonly mimeType?: string;
-}
-
-interface AcpEmbeddedResourceContent {
-  readonly type: 'resource';
-  readonly resource: {
-    readonly uri: string;
-    readonly text?: string;
-    readonly blob?: string;
-    readonly mimeType?: string;
-  };
-}
-
-type AcpContentBlock = AcpTextContent | AcpResourceLinkContent | AcpEmbeddedResourceContent;
-
-interface AcpSessionUpdateParams {
-  readonly sessionId: string;
-  readonly update: {
-    readonly sessionUpdate: string;
-    readonly content?: AcpContentBlock;
-    readonly currentModeId?: string;
-    readonly optionId?: string;
-    readonly currentValue?: string;
-  };
-}
+type SelectConfigOption = Extract<SessionConfigOption, { type: 'select' }>;
+type StreamContent = Extract<ContentBlock, { type: 'text' | 'resource_link' | 'resource' }>;
 
 export interface SessionManager {
   initialize(
@@ -155,14 +73,25 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   const historyCompleteCallbacks: ((sessionId: string, messageCount: number) => void)[] = [];
   const settingsChangeCallbacks: ((settings: SessionSettingsState) => void)[] = [];
 
+  const isSelectConfigOption = (option: SessionConfigOption): option is SelectConfigOption => {
+    return option.type === 'select';
+  };
+
+  const getStreamContent = (update: SessionNotification['update']): StreamContent | null => {
+    if (!('content' in update) || Array.isArray(update.content)) {
+      return null;
+    }
+    return update.content as StreamContent;
+  };
+
   const flattenOptions = (
     options:
-      | readonly AcpSessionConfigSelectOption[]
-      | readonly AcpSessionConfigSelectGroup[]
+      | readonly SessionConfigSelectOption[]
+      | readonly SessionConfigSelectGroup[]
   ): SessionSettingOption[] => {
     if (options.length === 0) return [];
     if ('group' in options[0]) {
-      return (options as readonly AcpSessionConfigSelectGroup[]).flatMap(group =>
+      return (options as readonly SessionConfigSelectGroup[]).flatMap(group =>
         group.options.map(option => ({
           value: option.value,
           name: option.name,
@@ -170,7 +99,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
         }))
       );
     }
-    return (options as readonly AcpSessionConfigSelectOption[]).map(option => ({
+    return (options as readonly SessionConfigSelectOption[]).map(option => ({
       value: option.value,
       name: option.name,
       description: option.description ?? undefined,
@@ -178,9 +107,9 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   };
 
   const normalizeSettings = (
-    modes?: AcpSessionModeState | null,
-    models?: AcpSessionModelState | null,
-    configOptions?: readonly AcpSessionConfigOption[] | null
+    modes?: SessionModeState | null,
+    models?: SessionModelState | null,
+    configOptions?: readonly SessionConfigOption[] | null
   ): SessionSettingsState => {
     const mode: SessionSelectSetting | null =
       modes && modes.availableModes.length > 0
@@ -198,7 +127,8 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
         : null;
 
     const configModel = configOptions?.find(
-      option => option.type === 'select' && option.category === 'model'
+      (option): option is SelectConfigOption =>
+        isSelectConfigOption(option) && option.category === 'model'
     );
 
     const model: SessionSelectSetting | null = models
@@ -234,9 +164,9 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   };
 
   const setSessionSettings = (
-    modes?: AcpSessionModeState | null,
-    models?: AcpSessionModelState | null,
-    configOptions?: readonly AcpSessionConfigOption[] | null
+    modes?: SessionModeState | null,
+    models?: SessionModelState | null,
+    configOptions?: readonly SessionConfigOption[] | null
   ): void => {
     sessionSettings = normalizeSettings(modes, models, configOptions);
     emitSettingsChange();
@@ -289,7 +219,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     const rpcClient = client;
 
     return pipe(
-      rpcClient.request<AcpSessionNewResponse>('session/new', {
+      rpcClient.request<NewSessionResponse>(AGENT_METHODS.session_new, {
         cwd: workingDirectory,
         mcpServers: [],
       }),
@@ -335,27 +265,30 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
       if (!isLoadingSession) return;
       if (notification.method !== 'session/update') return;
 
-      const params = notification.params as AcpSessionUpdateParams | undefined;
+      const params = notification.params as SessionNotification | undefined;
       if (!params?.update) return;
 
-      const { sessionUpdate, content } = params.update;
+      const { sessionUpdate } = params.update;
       if (params.sessionId !== sessionId) return;
 
-      if (sessionUpdate === 'current_mode_update' && params.update.currentModeId) {
-        updateCurrentMode(params.update.currentModeId);
+      if (sessionUpdate === 'current_mode_update') {
+        updateCurrentMode((params.update as CurrentModeUpdate).currentModeId);
         return;
       }
 
-      if (
-        sessionUpdate === 'config_option_update' &&
-        params.update.currentValue &&
-        sessionSettings.model &&
-        params.update.optionId === sessionSettings.model.id
-      ) {
-        updateCurrentModel(params.update.currentValue);
+      if (sessionUpdate === 'config_option_update' && sessionSettings.model) {
+        const configUpdate = params.update as ConfigOptionUpdate;
+        const modelConfig = configUpdate.configOptions.find(
+          (option): option is SelectConfigOption =>
+            isSelectConfigOption(option) && option.id === sessionSettings.model?.id
+        );
+        if (modelConfig) {
+          updateCurrentModel(modelConfig.currentValue);
+        }
         return;
       }
 
+      const content = getStreamContent(params.update);
       if (!content) return;
 
       const role =
@@ -402,7 +335,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
         const uri = content.resource.uri;
         const filePath = uri.replace(/^file:\/\//, '').split('#')[0];
         const fileName = filePath.split('/').pop() || 'file';
-        const fileContent = content.resource.text || '';
+        const fileContent = 'text' in content.resource ? (content.resource.text ?? '') : '';
         const msg: ChatMessage = {
           id: generateId(),
           role,
@@ -423,7 +356,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     });
 
     return pipe(
-      rpcClient.request<AcpSessionLoadResponse>('session/load', {
+      rpcClient.request<LoadSessionResponse>(AGENT_METHODS.session_load, {
         sessionId,
         cwd: session.cwd,
         mcpServers: [],
@@ -483,7 +416,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     }
 
     return pipe(
-      client.request<unknown>('session/set_mode', {
+      client.request<unknown>(AGENT_METHODS.session_set_mode, {
         sessionId: activeSessionId,
         modeId,
       }),
@@ -506,7 +439,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
 
     if (sessionSettings.model?.id === 'session-model') {
       return pipe(
-        client.request<unknown>('session/set_model', {
+        client.request<unknown>(AGENT_METHODS.session_set_model, {
           sessionId: activeSessionId,
           modelId,
         }),
@@ -519,7 +452,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
 
     if (sessionSettings.model) {
       return pipe(
-        client.request<unknown>('session/set_config_option', {
+        client.request<unknown>(AGENT_METHODS.session_set_config_option, {
           sessionId: activeSessionId,
           configId: sessionSettings.model.id,
           value: modelId,

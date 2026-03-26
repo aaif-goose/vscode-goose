@@ -7,6 +7,14 @@ import * as E from 'fp-ts/Either';
 import * as fs from 'fs/promises';
 import * as vscode from 'vscode';
 import {
+  AGENT_METHODS,
+  PROTOCOL_VERSION,
+  type ContentBlock,
+  type InitializeResponse,
+  type PromptResponse,
+  type SessionNotification,
+} from '@agentclientprotocol/sdk';
+import {
   formatError,
   isBinaryNotFoundError,
   isSubprocessSpawnError,
@@ -131,57 +139,8 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
   log.info('[Mock] Mock streaming handler registered');
 }
 
-/** ACP streaming content block types */
-type AcpStreamContentBlock =
-  | { readonly type: 'text'; readonly text: string }
-  | {
-      readonly type: 'resource_link';
-      readonly uri: string;
-      readonly name: string;
-      readonly mimeType?: string;
-    }
-  | {
-      readonly type: 'resource';
-      readonly resource: {
-        readonly uri: string;
-        readonly text?: string;
-        readonly blob?: string;
-        readonly mimeType?: string;
-      };
-    };
-
-interface AcpSessionUpdateParams {
-  readonly sessionId: string;
-  readonly update: {
-    readonly sessionUpdate: string;
-    readonly content?: AcpStreamContentBlock;
-  };
-}
-
-interface AcpPromptResponse {
-  readonly stopReason: 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
-}
-
-interface AcpInitializeResponse {
-  readonly protocolVersion: number;
-  readonly agentCapabilities?: {
-    readonly loadSession?: boolean;
-    readonly promptCapabilities?: {
-      readonly audio?: boolean;
-      readonly image?: boolean;
-      readonly embeddedContext?: boolean;
-    };
-  };
-  readonly agentInfo?: {
-    readonly name?: string;
-    readonly version?: string;
-  };
-}
-
 /** ACP prompt content block types */
-type AcpContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'resource_link'; uri: string; name: string; mimeType?: string };
+type AcpContentBlock = Extract<ContentBlock, { type: 'text' | 'resource_link' }>;
 
 /** Get MIME type from file path */
 function getMimeType(filePath: string): string {
@@ -284,8 +243,8 @@ async function initializeAcpSession(
   log.info('Initializing ACP connection...');
 
   // Call ACP initialize to get agent capabilities
-  const initResult = await client.request<AcpInitializeResponse>('initialize', {
-    protocolVersion: 1,
+  const initResult = await client.request<InitializeResponse>(AGENT_METHODS.initialize, {
+    protocolVersion: PROTOCOL_VERSION,
     clientInfo: {
       name: 'vscode-goose',
       version: '0.1.0',
@@ -370,17 +329,21 @@ function setupAcpCommunication(
 
   client.onNotification((notification: JsonRpcNotification) => {
     const method = notification.method;
-    const params = notification.params as AcpSessionUpdateParams | undefined;
+    const params = notification.params as SessionNotification | undefined;
 
     if (method === 'session/update' && params?.update) {
-      const { sessionUpdate, content } = params.update;
+      const { sessionUpdate } = params.update;
 
       if (
         sessionUpdate === 'agent_message_chunk' &&
         currentResponseId &&
-        content?.type === 'text'
+        'content' in params.update &&
+        !Array.isArray(params.update.content) &&
+        params.update.content.type === 'text'
       ) {
-        provider.postMessage(createStreamTokenMessage(currentResponseId, content.text, false));
+        provider.postMessage(
+          createStreamTokenMessage(currentResponseId, params.update.content.text, false)
+        );
       }
     }
   });
@@ -425,7 +388,7 @@ function setupAcpCommunication(
         // Build prompt content blocks with resource links for context
         const promptBlocks = await buildPromptBlocks(content, contextChips, log);
 
-        const result = await client.request<AcpPromptResponse>('session/prompt', {
+        const result = await client.request<PromptResponse>(AGENT_METHODS.session_prompt, {
           sessionId: activeSessionId,
           prompt: promptBlocks,
         })();
