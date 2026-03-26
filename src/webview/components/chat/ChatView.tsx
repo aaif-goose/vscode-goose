@@ -94,7 +94,6 @@ export function ChatView({
         messages={messages}
         isGenerating={isGenerating}
         focusedIndex={focusedIndex}
-        onMessageFocus={setFocusedIndex}
         onRetry={retryMessage}
       />
       <InputArea

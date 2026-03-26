@@ -1,14 +1,14 @@
 import { KeyboardEvent, useCallback, useEffect, useRef } from 'react';
 import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
 import { isFocusChatInputMessage } from '../../../shared/messages';
+import { SessionSettingsState } from '../../../shared/sessionTypes';
 import { onMessage } from '../../bridge';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import { FilePicker } from '../picker/FilePicker';
 import { ChipStack } from './ChipStack';
-import { SessionSettingsBar } from './SessionSettingsBar';
 import { SendButton } from './SendButton';
+import { SessionSettingsBar } from './SessionSettingsBar';
 import { StopButton } from './StopButton';
-import { SessionSettingsState } from '../../../shared/sessionTypes';
 
 interface InputAreaProps {
   value: string;
@@ -67,6 +67,7 @@ export function InputArea({
     textarea.style.height = 'auto';
     const newHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
     textarea.style.height = `${newHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
   }, [value]);
 
   // Click outside handler to close file picker
@@ -195,7 +196,7 @@ export function InputArea({
   );
 
   return (
-    <div className="shrink-0 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] p-4">
+    <div className="shrink-0 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] px-3 py-2.5">
       {/* Render ChipStack above the input area when chips exist, or show announcements */}
       {(chips.length > 0 || chipAnnouncement) && onRemoveChip && onChipFocusChange && (
         <ChipStack
@@ -206,8 +207,8 @@ export function InputArea({
           announcement={chipAnnouncement}
         />
       )}
-      <div className="flex items-start gap-2">
-        <div ref={containerRef} className="flex-1 relative">
+      <div className="rounded-2xl border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+        <div ref={containerRef} className="relative">
           {/* File picker dropdown */}
           <FilePicker
             isOpen={filePicker.isOpen}
@@ -226,23 +227,29 @@ export function InputArea({
             placeholder={PLACEHOLDER}
             disabled={disabled}
             rows={1}
-            className="w-full resize-none bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-lg px-3 py-2 focus:outline-none focus:border-[var(--vscode-focusBorder)] placeholder:text-[var(--vscode-input-placeholderForeground)]"
+            className="min-h-[36px] w-full resize-none border-0 bg-transparent px-1 py-0.5 text-[var(--vscode-input-foreground)] focus:outline-none placeholder:text-[var(--vscode-input-placeholderForeground)]"
             style={{ maxHeight: `${MAX_HEIGHT}px` }}
             aria-label="Message input"
           />
         </div>
-        {isGenerating ? (
-          <StopButton onClick={onStop} />
-        ) : (
-          <SendButton onClick={handleSend} disabled={!canSend} />
-        )}
+        <div className="mt-2 flex items-end justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <SessionSettingsBar
+              settings={settings}
+              disabled={disabled || isGenerating}
+              onModeChange={onModeChange}
+              onModelChange={onModelChange}
+            />
+          </div>
+          <div className="shrink-0">
+            {isGenerating ? (
+              <StopButton onClick={onStop} />
+            ) : (
+              <SendButton onClick={handleSend} disabled={!canSend} />
+            )}
+          </div>
+        </div>
       </div>
-      <SessionSettingsBar
-        settings={settings}
-        disabled={disabled || isGenerating}
-        onModeChange={onModeChange}
-        onModelChange={onModelChange}
-      />
     </div>
   );
 }

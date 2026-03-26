@@ -228,9 +228,11 @@ export function MarkdownRenderer({
   variant = 'default',
 }: MarkdownRendererProps) {
   const components = createComponents(variant);
+  const contentClassName =
+    variant === 'bubble' ? 'markdown-content markdown-content-bubble' : 'markdown-content';
 
   return (
-    <div className="markdown-content">
+    <div className={contentClassName}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>
