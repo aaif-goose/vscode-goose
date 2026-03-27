@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, memo, useEffect, useImperativeHandle, useRef } from 'react';
 import { ChatMessage, MessageStatus } from '../../../shared/types';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
 import { GooseWatermark } from '../icons/GooseWatermark';
@@ -15,7 +15,7 @@ export interface MessageListHandle {
   scrollToMessage: (index: number) => void;
 }
 
-export const MessageList = forwardRef<MessageListHandle, MessageListProps>(function MessageList(
+const MessageListComponent = forwardRef<MessageListHandle, MessageListProps>(function MessageList(
   { messages, isGenerating, focusedIndex, onRetry },
   ref
 ) {
@@ -95,3 +95,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
     </div>
   );
 });
+
+MessageListComponent.displayName = 'MessageList';
+
+export const MessageList = memo(MessageListComponent);

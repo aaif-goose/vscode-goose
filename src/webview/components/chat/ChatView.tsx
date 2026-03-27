@@ -11,6 +11,7 @@ interface ChatViewProps {
   className?: string;
   chat: UseChatReturn;
   contextChips: UseContextChipsReturn;
+  activeSessionId: string | null;
   settings: SessionSettingsState;
   setSessionMode: (modeId: string) => void;
   setSessionModel: (modelId: string) => void;
@@ -20,6 +21,7 @@ export function ChatView({
   className = '',
   chat,
   contextChips,
+  activeSessionId,
   settings,
   setSessionMode,
   setSessionModel,
@@ -27,8 +29,6 @@ export function ChatView({
   const {
     messages,
     isGenerating,
-    inputValue,
-    setInputValue,
     sendMessage,
     stopGeneration,
     focusedIndex,
@@ -97,8 +97,7 @@ export function ChatView({
         onRetry={retryMessage}
       />
       <InputArea
-        value={inputValue}
-        onChange={setInputValue}
+        activeSessionId={activeSessionId}
         onSend={sendMessage}
         onStop={stopGeneration}
         isGenerating={isGenerating}

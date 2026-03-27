@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ChatMessage, MessageRole } from '../../../shared/types';
 import { AssistantMessage } from './AssistantMessage';
 import { ErrorMessage } from './ErrorMessage';
@@ -10,7 +11,7 @@ interface MessageItemProps {
   onRetry?: (content: string) => void;
 }
 
-export function MessageItem({ message, isFocused, isStreaming, onRetry }: MessageItemProps) {
+function MessageItemComponent({ message, isFocused, isStreaming, onRetry }: MessageItemProps) {
   const focusClasses = isFocused
     ? 'ring-2 ring-[var(--vscode-focusBorder)] ring-offset-2 ring-offset-[var(--vscode-editor-background)]'
     : '';
@@ -68,3 +69,5 @@ export function MessageItem({ message, isFocused, isStreaming, onRetry }: Messag
 
   return null;
 }
+
+export const MessageItem = memo(MessageItemComponent);

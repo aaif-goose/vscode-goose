@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer } from 'react';
 import type { ContextChip } from '../../shared/contextTypes';
 import {
   ContextChipData,
@@ -12,13 +12,12 @@ import {
   isStreamTokenMessage,
 } from '../../shared/messages';
 import { ChatMessage, MessageContext, MessageRole, MessageStatus } from '../../shared/types';
-import { getState, onMessage, postMessage, setState } from '../bridge';
+import { onMessage, postMessage } from '../bridge';
 
 interface ChatState {
   messages: ChatMessage[];
   isGenerating: boolean;
   currentResponseId: string | null;
-  inputValue: string;
   focusedIndex: number | null;
 }
 
@@ -29,7 +28,6 @@ type ChatAction =
   | { type: 'COMPLETE_GENERATION'; payload: { messageId: string } }
   | { type: 'CANCEL_GENERATION'; payload: { messageId: string } }
   | { type: 'SET_MESSAGES'; payload: ChatMessage[] }
-  | { type: 'SET_INPUT'; payload: string }
   | { type: 'SET_FOCUSED_INDEX'; payload: number | null }
   | { type: 'ADD_ERROR_MESSAGE'; payload: { id: string; content: string } }
   | { type: 'ADD_HISTORY_MESSAGE'; payload: ChatMessage }
@@ -45,7 +43,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         messages: [...state.messages, action.payload],
-        inputValue: '',
       };
 
     case 'START_GENERATION': {
@@ -100,12 +97,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: action.payload,
       };
 
-    case 'SET_INPUT':
-      return {
-        ...state,
-        inputValue: action.payload,
-      };
-
     case 'SET_FOCUSED_INDEX':
       return {
         ...state,
@@ -147,18 +138,11 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   }
 }
 
-interface PersistedState {
-  inputDraft: string;
-}
-
 function getInitialState(): ChatState {
-  const persisted = getState<PersistedState>();
-
   return {
     messages: [],
     isGenerating: false,
     currentResponseId: null,
-    inputValue: persisted?.inputDraft ?? '',
     focusedIndex: null,
   };
 }
@@ -166,9 +150,7 @@ function getInitialState(): ChatState {
 export interface UseChatReturn {
   messages: readonly ChatMessage[];
   isGenerating: boolean;
-  inputValue: string;
-  setInputValue: (value: string) => void;
-  sendMessage: (chips?: readonly ContextChip[]) => void;
+  sendMessage: (content: string, chips?: readonly ContextChip[]) => void;
   stopGeneration: () => void;
   focusedIndex: number | null;
   setFocusedIndex: (index: number | null) => void;
@@ -177,12 +159,6 @@ export interface UseChatReturn {
 
 export function useChat(): UseChatReturn {
   const [state, dispatch] = useReducer(chatReducer, null, getInitialState);
-  const inputValueRef = useRef(state.inputValue);
-
-  useEffect(() => {
-    inputValueRef.current = state.inputValue;
-    setState<PersistedState>({ inputDraft: state.inputValue });
-  }, [state.inputValue]);
 
   useEffect(() => {
     const unsubscribe = onMessage(message => {
@@ -227,46 +203,40 @@ export function useChat(): UseChatReturn {
     return unsubscribe;
   }, []);
 
-  const setInputValue = useCallback((value: string) => {
-    dispatch({ type: 'SET_INPUT', payload: value });
-  }, []);
+  const sendMessage = useCallback((content: string, chips?: readonly ContextChip[]) => {
+    const trimmedContent = content.trim();
+    if (!trimmedContent && (!chips || chips.length === 0)) return;
 
-  const sendMessage = useCallback(
-    (chips?: readonly ContextChip[]) => {
-      const content = inputValueRef.current.trim();
-      if (!content && (!chips || chips.length === 0)) return;
+    const userMessageId = generateId();
+    const responseId = generateId();
 
-      const userMessageId = generateId();
-      const responseId = generateId();
+    // Convert chips to context for display in message
+    const context: MessageContext[] | undefined = chips?.map(chip => ({
+      filePath: chip.filePath,
+      fileName: chip.fileName,
+      range: chip.range,
+    }));
 
-      // Convert chips to context for display in message
-      const context: MessageContext[] | undefined = chips?.map(chip => ({
-        filePath: chip.filePath,
-        fileName: chip.fileName,
-        range: chip.range,
-      }));
+    const userMessage: ChatMessage = {
+      id: userMessageId,
+      role: MessageRole.USER,
+      content: trimmedContent || '(context only)',
+      timestamp: new Date(),
+      status: MessageStatus.COMPLETE,
+      context: context && context.length > 0 ? context : undefined,
+    };
 
-      const userMessage: ChatMessage = {
-        id: userMessageId,
-        role: MessageRole.USER,
-        content: content || '(context only)',
-        timestamp: new Date(),
-        status: MessageStatus.COMPLETE,
-        context: context && context.length > 0 ? context : undefined,
-      };
+    dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
+    dispatch({ type: 'START_GENERATION', payload: { responseId } });
 
-      dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
-      dispatch({ type: 'START_GENERATION', payload: { responseId } });
+    // Convert ContextChip to ContextChipData (only what extension needs)
+    const chipData: ContextChipData[] | undefined = chips?.map(chip => ({
+      filePath: chip.filePath,
+      range: chip.range,
+    }));
 
-      // Convert ContextChip to ContextChipData (only what extension needs)
-      const chipData: ContextChipData[] | undefined = chips?.map(chip => ({
-        filePath: chip.filePath,
-        range: chip.range,
-      }));
-
-      postMessage(createSendMessageMessage(content, userMessageId, responseId, chipData));
-    }
-  );
+    postMessage(createSendMessageMessage(trimmedContent, userMessageId, responseId, chipData));
+  });
 
   const stopGeneration = useCallback(() => {
     postMessage(createStopGenerationMessage());
@@ -276,33 +246,29 @@ export function useChat(): UseChatReturn {
     dispatch({ type: 'SET_FOCUSED_INDEX', payload: index });
   }, []);
 
-  const retryMessage = useCallback(
-    (content: string) => {
-      if (!content.trim()) return;
+  const retryMessage = useCallback((content: string) => {
+    if (!content.trim()) return;
 
-      const userMessageId = generateId();
-      const responseId = generateId();
+    const userMessageId = generateId();
+    const responseId = generateId();
 
-      const userMessage: ChatMessage = {
-        id: userMessageId,
-        role: MessageRole.USER,
-        content: content.trim(),
-        timestamp: new Date(),
-        status: MessageStatus.COMPLETE,
-      };
+    const userMessage: ChatMessage = {
+      id: userMessageId,
+      role: MessageRole.USER,
+      content: content.trim(),
+      timestamp: new Date(),
+      status: MessageStatus.COMPLETE,
+    };
 
-      dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
-      dispatch({ type: 'START_GENERATION', payload: { responseId } });
+    dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
+    dispatch({ type: 'START_GENERATION', payload: { responseId } });
 
-      postMessage(createSendMessageMessage(content.trim(), userMessageId, responseId));
-    }
-  );
+    postMessage(createSendMessageMessage(content.trim(), userMessageId, responseId));
+  });
 
   return {
     messages: state.messages,
     isGenerating: state.isGenerating,
-    inputValue: state.inputValue,
-    setInputValue,
     sendMessage,
     stopGeneration,
     focusedIndex: state.focusedIndex,

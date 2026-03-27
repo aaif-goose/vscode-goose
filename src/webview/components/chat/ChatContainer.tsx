@@ -17,8 +17,6 @@ export function ChatContainer({ className = '' }: ChatContainerProps) {
   const {
     messages,
     isGenerating,
-    inputValue,
-    setInputValue,
     sendMessage,
     stopGeneration,
     focusedIndex,
@@ -55,8 +53,6 @@ export function ChatContainer({ className = '' }: ChatContainerProps) {
         onRetry={retryMessage}
       />
       <InputArea
-        value={inputValue}
-        onChange={setInputValue}
         onSend={sendMessage}
         onStop={stopGeneration}
         isGenerating={isGenerating}

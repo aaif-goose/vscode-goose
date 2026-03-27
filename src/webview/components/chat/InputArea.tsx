@@ -1,8 +1,8 @@
-import { KeyboardEvent, useCallback, useEffect, useRef } from 'react';
+import { KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
 import { isFocusChatInputMessage } from '../../../shared/messages';
 import { SessionSettingsState } from '../../../shared/sessionTypes';
-import { onMessage } from '../../bridge';
+import { getState, onMessage, setState } from '../../bridge';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import { FilePicker } from '../picker/FilePicker';
 import { ChipStack } from './ChipStack';
@@ -11,12 +11,11 @@ import { SessionSettingsBar } from './SessionSettingsBar';
 import { StopButton } from './StopButton';
 
 interface InputAreaProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: (chips?: readonly ContextChip[]) => void;
+  onSend: (content: string, chips?: readonly ContextChip[]) => void;
   onStop: () => void;
   isGenerating: boolean;
   disabled: boolean;
+  activeSessionId?: string | null;
   chips?: readonly ContextChip[];
   onRemoveChip?: (chipId: string) => void;
   chipFocusedIndex?: number | null;
@@ -30,16 +29,55 @@ interface InputAreaProps {
 }
 
 const MAX_HEIGHT = 200;
+const DRAFT_PERSIST_DEBOUNCE_MS = 150;
 const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
 const PLACEHOLDER = `Message Goose... (${isMac ? '⌘' : 'Ctrl'}+↑/↓ to navigate)`;
 
+interface PersistedState {
+  inputDraft?: string;
+  inputDraftsBySession?: Record<string, string>;
+  unsessionedDraft?: string;
+}
+
+function getDraftForSession(state: PersistedState | undefined, sessionId?: string | null): string {
+  if (!state) return '';
+
+  if (sessionId) {
+    return state.inputDraftsBySession?.[sessionId] ?? '';
+  }
+
+  return state.unsessionedDraft ?? state.inputDraft ?? '';
+}
+
+function setDraftForSession(
+  state: PersistedState | undefined,
+  sessionId: string | null | undefined,
+  draft: string
+): PersistedState {
+  const nextState: PersistedState = {
+    inputDraftsBySession: { ...(state?.inputDraftsBySession ?? {}) },
+    unsessionedDraft: state?.unsessionedDraft ?? '',
+  };
+
+  if (sessionId) {
+    if (draft) {
+      nextState.inputDraftsBySession![sessionId] = draft;
+    } else {
+      delete nextState.inputDraftsBySession![sessionId];
+    }
+  } else {
+    nextState.unsessionedDraft = draft;
+  }
+
+  return nextState;
+}
+
 export function InputArea({
-  value,
-  onChange,
   onSend,
   onStop,
   isGenerating,
   disabled,
+  activeSessionId = null,
   chips = [],
   onRemoveChip,
   chipFocusedIndex = null,
@@ -53,21 +91,70 @@ export function InputArea({
 }: InputAreaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const draftPersistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [value, setValue] = useState(() =>
+    getDraftForSession(getState<PersistedState>(), activeSessionId)
+  );
+  const latestValueRef = useRef(value);
+  const sessionIdRef = useRef<string | null>(activeSessionId);
 
   // Initialize file picker hook
   // biome-ignore lint/suspicious/noEmptyBlockStatements: intentional noop
   const noopAddChip = useCallback(() => {}, []);
-  const filePicker = useFilePicker(onAddFileChip ?? noopAddChip, textareaRef, onChange);
+  const filePicker = useFilePicker(onAddFileChip ?? noopAddChip, textareaRef, setValue);
+
+  useEffect(() => {
+    latestValueRef.current = value;
+  }, [value]);
+
+  const persistDraft = useCallback((sessionId: string | null, draft: string) => {
+    const persistedState = getState<PersistedState>();
+    setState<PersistedState>(setDraftForSession(persistedState, sessionId, draft));
+  }, []);
+
+  useEffect(() => {
+    if (sessionIdRef.current !== activeSessionId) {
+      persistDraft(sessionIdRef.current, latestValueRef.current);
+      sessionIdRef.current = activeSessionId;
+      setValue(getDraftForSession(getState<PersistedState>(), activeSessionId));
+    }
+  }, [activeSessionId, persistDraft]);
+
+  useEffect(() => {
+    if (draftPersistTimeoutRef.current) {
+      clearTimeout(draftPersistTimeoutRef.current);
+    }
+
+    draftPersistTimeoutRef.current = setTimeout(() => {
+      persistDraft(sessionIdRef.current, value);
+    }, DRAFT_PERSIST_DEBOUNCE_MS);
+
+    return () => {
+      if (draftPersistTimeoutRef.current) {
+        clearTimeout(draftPersistTimeoutRef.current);
+      }
+    };
+  }, [value, persistDraft]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: value triggers textarea resize
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
+    const previousHeight = textarea.style.height;
     textarea.style.height = 'auto';
-    const newHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
-    textarea.style.height = `${newHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
+    const nextHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
+    const nextHeightPx = `${nextHeight}px`;
+    if (previousHeight !== nextHeightPx) {
+      textarea.style.height = nextHeightPx;
+    } else {
+      textarea.style.height = previousHeight;
+    }
+
+    const nextOverflow = textarea.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
+    if (textarea.style.overflowY !== nextOverflow) {
+      textarea.style.overflowY = nextOverflow;
+    }
   }, [value]);
 
   // Click outside handler to close file picker
@@ -104,10 +191,11 @@ export function InputArea({
     if (!userInput && !hasChips) return;
 
     // Pass chips to onSend - extension will handle formatting
-    onSend(hasChips ? chips : undefined);
-    onChange('');
+    onSend(userInput, hasChips ? chips : undefined);
+    setValue('');
+    persistDraft(sessionIdRef.current, '');
     onClearChips?.();
-  }, [value, disabled, isGenerating, chips, onChange, onSend, onClearChips]);
+  }, [value, disabled, isGenerating, chips, onSend, onClearChips, persistDraft]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Pass keyboard events to file picker first
@@ -176,10 +264,10 @@ export function InputArea({
       const newValue = e.target.value;
       const cursorPosition = e.target.selectionStart ?? 0;
 
-      onChange(newValue);
+      setValue(newValue);
       filePicker.handleInput(newValue, cursorPosition);
     },
-    [onChange, filePicker]
+    [filePicker]
   );
 
   // File picker navigation handlers

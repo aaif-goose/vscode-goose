@@ -1,9 +1,4 @@
-import {
-  type PointerEvent as ReactPointerEvent,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from 'react';
 import {
   isStatusUpdateMessage,
   isVersionStatusMessage,
@@ -278,6 +273,7 @@ export function App() {
             className="flex-1"
             chat={chat}
             contextChips={contextChips}
+            activeSessionId={activeSessionId}
             settings={settings}
             setSessionMode={setSessionMode}
             setSessionModel={setSessionModel}
