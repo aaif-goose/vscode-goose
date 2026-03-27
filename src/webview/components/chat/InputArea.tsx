@@ -233,7 +233,7 @@ export function InputArea({
           />
         </div>
         <div className="mt-2 flex flex-nowrap items-end justify-between gap-2">
-          <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="min-w-0 flex-1">
             <SessionSettingsBar
               settings={settings}
               disabled={disabled || isGenerating}
