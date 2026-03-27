@@ -231,40 +231,42 @@ export function useChat(): UseChatReturn {
     dispatch({ type: 'SET_INPUT', payload: value });
   }, []);
 
-  const sendMessage = useCallback((chips?: readonly ContextChip[]) => {
-    const content = inputValueRef.current.trim();
-    if (!content && (!chips || chips.length === 0)) return;
+  const sendMessage = useCallback(
+    (chips?: readonly ContextChip[]) => {
+      const content = inputValueRef.current.trim();
+      if (!content && (!chips || chips.length === 0)) return;
 
-    const userMessageId = generateId();
-    const responseId = generateId();
+      const userMessageId = generateId();
+      const responseId = generateId();
 
-    // Convert chips to context for display in message
-    const context: MessageContext[] | undefined = chips?.map(chip => ({
-      filePath: chip.filePath,
-      fileName: chip.fileName,
-      range: chip.range,
-    }));
+      // Convert chips to context for display in message
+      const context: MessageContext[] | undefined = chips?.map(chip => ({
+        filePath: chip.filePath,
+        fileName: chip.fileName,
+        range: chip.range,
+      }));
 
-    const userMessage: ChatMessage = {
-      id: userMessageId,
-      role: MessageRole.USER,
-      content: content || '(context only)',
-      timestamp: new Date(),
-      status: MessageStatus.COMPLETE,
-      context: context && context.length > 0 ? context : undefined,
-    };
+      const userMessage: ChatMessage = {
+        id: userMessageId,
+        role: MessageRole.USER,
+        content: content || '(context only)',
+        timestamp: new Date(),
+        status: MessageStatus.COMPLETE,
+        context: context && context.length > 0 ? context : undefined,
+      };
 
-    dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
-    dispatch({ type: 'START_GENERATION', payload: { responseId } });
+      dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
+      dispatch({ type: 'START_GENERATION', payload: { responseId } });
 
-    // Convert ContextChip to ContextChipData (only what extension needs)
-    const chipData: ContextChipData[] | undefined = chips?.map(chip => ({
-      filePath: chip.filePath,
-      range: chip.range,
-    }));
+      // Convert ContextChip to ContextChipData (only what extension needs)
+      const chipData: ContextChipData[] | undefined = chips?.map(chip => ({
+        filePath: chip.filePath,
+        range: chip.range,
+      }));
 
-    postMessage(createSendMessageMessage(content, userMessageId, responseId, chipData));
-  }, []);
+      postMessage(createSendMessageMessage(content, userMessageId, responseId, chipData));
+    }
+  );
 
   const stopGeneration = useCallback(() => {
     postMessage(createStopGenerationMessage());
@@ -274,25 +276,27 @@ export function useChat(): UseChatReturn {
     dispatch({ type: 'SET_FOCUSED_INDEX', payload: index });
   }, []);
 
-  const retryMessage = useCallback((content: string) => {
-    if (!content.trim()) return;
+  const retryMessage = useCallback(
+    (content: string) => {
+      if (!content.trim()) return;
 
-    const userMessageId = generateId();
-    const responseId = generateId();
+      const userMessageId = generateId();
+      const responseId = generateId();
 
-    const userMessage: ChatMessage = {
-      id: userMessageId,
-      role: MessageRole.USER,
-      content: content.trim(),
-      timestamp: new Date(),
-      status: MessageStatus.COMPLETE,
-    };
+      const userMessage: ChatMessage = {
+        id: userMessageId,
+        role: MessageRole.USER,
+        content: content.trim(),
+        timestamp: new Date(),
+        status: MessageStatus.COMPLETE,
+      };
 
-    dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
-    dispatch({ type: 'START_GENERATION', payload: { responseId } });
+      dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
+      dispatch({ type: 'START_GENERATION', payload: { responseId } });
 
-    postMessage(createSendMessageMessage(content.trim(), userMessageId, responseId));
-  }, []);
+      postMessage(createSendMessageMessage(content.trim(), userMessageId, responseId));
+    }
+  );
 
   return {
     messages: state.messages,

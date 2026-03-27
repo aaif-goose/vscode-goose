@@ -26,10 +26,10 @@ export function SessionList({
     groupedSessions.length === 0 || groupedSessions.every(g => g.sessions.length === 0);
 
   return (
-    <div className="flex flex-col h-full bg-[var(--vscode-sideBar-background)]">
+    <div className="flex h-full flex-col bg-[var(--vscode-sideBar-background)]">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--vscode-panel-border)]">
         <div>
-          <h2 className="text-base font-medium text-[var(--vscode-foreground)]">Chat history</h2>
+          <h2 className="text-base font-medium text-[var(--vscode-foreground)]">Sessions</h2>
           <p className="text-xs text-[var(--vscode-descriptionForeground)] mt-0.5">
             Select a session to continue
           </p>
