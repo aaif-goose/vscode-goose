@@ -24,13 +24,21 @@ const HISTORY_MIN_WIDTH_PX = 14 * 16;
 // chat fixed here and let the history pane start overlaying it instead.
 const CHAT_MIN_WIDTH_PX = 24 * 16;
 const HISTORY_OVERLAY_MARGIN_PX = 12;
+const HISTORY_ANIMATION_DURATION_MS = 250;
+
+function easeOutCubic(t: number): number {
+  return 1 - (1 - t) ** 3;
+}
 
 export function App() {
   const [status, setStatus] = useState<ProcessStatus>(ProcessStatus.STOPPED);
   const [versionStatus, setVersionStatus] = useState<VersionStatusPayload | null>(null);
   const [contentWidth, setContentWidth] = useState<number | null>(null);
   const [historyWidth, setHistoryWidth] = useState(HISTORY_DEFAULT_WIDTH_PX);
+  const [historyOpenProgress, setHistoryOpenProgress] = useState(0);
   const historyWidthRef = useRef(HISTORY_DEFAULT_WIDTH_PX);
+  const historyOpenProgressRef = useRef(0);
+  const historyAnimationFrameRef = useRef<number | null>(null);
   const {
     activeSession,
     groupedSessions,
@@ -89,6 +97,10 @@ export function App() {
     historyWidthRef.current = historyWidth;
   }, [historyWidth]);
 
+  useEffect(() => {
+    historyOpenProgressRef.current = historyOpenProgress;
+  }, [historyOpenProgress]);
+
   const effectiveHistoryWidth =
     contentWidth === null
       ? historyWidth
@@ -97,17 +109,76 @@ export function App() {
           Math.max(HISTORY_OVERLAY_MARGIN_PX, contentWidth - HISTORY_OVERLAY_MARGIN_PX)
         );
 
-  const shouldUseHistoryOverlay =
-    isPanelOpen &&
-    contentWidth !== null &&
-    contentWidth - effectiveHistoryWidth < CHAT_MIN_WIDTH_PX;
-  const chatPaneStyle = shouldUseHistoryOverlay
-    ? {
-        width: `${CHAT_MIN_WIDTH_PX}px`,
-        minWidth: `${CHAT_MIN_WIDTH_PX}px`,
-        maxWidth: `${CHAT_MIN_WIDTH_PX}px`,
+  useEffect(() => {
+    if (historyAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(historyAnimationFrameRef.current);
+      historyAnimationFrameRef.current = null;
+    }
+
+    const startProgress = historyOpenProgressRef.current;
+    const targetProgress = isPanelOpen ? 1 : 0;
+
+    if (Math.abs(startProgress - targetProgress) < 0.001) {
+      setHistoryOpenProgress(targetProgress);
+      return;
+    }
+
+    let startTime: number | null = null;
+
+    const step = (timestamp: number) => {
+      if (startTime === null) {
+        startTime = timestamp;
       }
-    : { minWidth: '0px' };
+
+      const elapsed = timestamp - startTime;
+      const t = Math.min(1, elapsed / HISTORY_ANIMATION_DURATION_MS);
+      const easedT = easeOutCubic(t);
+      const nextProgress = startProgress + (targetProgress - startProgress) * easedT;
+
+      setHistoryOpenProgress(nextProgress);
+
+      if (t < 1) {
+        historyAnimationFrameRef.current = window.requestAnimationFrame(step);
+      } else {
+        historyAnimationFrameRef.current = null;
+      }
+    };
+
+    historyAnimationFrameRef.current = window.requestAnimationFrame(step);
+
+    return () => {
+      if (historyAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(historyAnimationFrameRef.current);
+        historyAnimationFrameRef.current = null;
+      }
+    };
+  }, [isPanelOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (historyAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(historyAnimationFrameRef.current);
+      }
+    };
+  }, []);
+
+  const isHistoryRendered = isPanelOpen || historyOpenProgress > 0.001;
+  const visibleHistoryWidth = effectiveHistoryWidth * historyOpenProgress;
+  const historyLeftEdge =
+    contentWidth === null ? null : Math.max(0, contentWidth - visibleHistoryWidth);
+  const chatWidth =
+    historyLeftEdge === null || contentWidth === null
+      ? null
+      : Math.min(contentWidth, Math.max(CHAT_MIN_WIDTH_PX, historyLeftEdge));
+  const isHistoryOverlayingChat = historyLeftEdge !== null && historyLeftEdge < CHAT_MIN_WIDTH_PX;
+  const chatPaneStyle =
+    chatWidth === null
+      ? { minWidth: '0px' }
+      : {
+          width: `${chatWidth}px`,
+          minWidth: `${chatWidth}px`,
+          maxWidth: `${chatWidth}px`,
+        };
 
   const handleHistoryResizeStart = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -189,9 +260,9 @@ export function App() {
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <div
-          className={`flex flex-col overflow-hidden ${shouldUseHistoryOverlay ? 'shrink-0' : 'flex-1'}`}
+          className={`flex shrink-0 flex-col overflow-hidden`}
           style={chatPaneStyle}
-          onClick={shouldUseHistoryOverlay ? closePanel : undefined}
+          onClick={isHistoryOverlayingChat ? closePanel : undefined}
         >
           {isLoadingHistory && (
             <div className="px-4 py-2 text-sm text-[var(--vscode-descriptionForeground)] bg-[var(--vscode-editor-background)] border-b border-[var(--vscode-panel-border)]">
@@ -213,15 +284,12 @@ export function App() {
           />
         </div>
 
-        {isPanelOpen && (
+        {isHistoryRendered && (
           <div
-            className={`${
-              shouldUseHistoryOverlay
-                ? 'absolute inset-y-0 right-0 z-20 shadow-[-10px_0_24px_rgba(0,0,0,0.28)]'
-                : 'relative h-full shrink-0'
-            } border-l border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)]`}
+            className={`absolute inset-y-0 right-0 z-20 border-l border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] shadow-[-10px_0_24px_rgba(0,0,0,0.28)]`}
             style={{
               width: `${effectiveHistoryWidth}px`,
+              transform: `translateX(${(1 - historyOpenProgress) * 100}%)`,
             }}
           >
             <div
