@@ -10,6 +10,7 @@ interface AssistantMessageProps {
   timestamp?: Date;
   status: MessageStatus;
   isStreaming: boolean;
+  errorDetails?: string;
 }
 
 function formatTime(date?: Date): string {
@@ -22,6 +23,7 @@ export function AssistantMessage({
   timestamp,
   status,
   isStreaming,
+  errorDetails,
 }: AssistantMessageProps) {
   const showIndicator = isStreaming && !content;
 
@@ -36,6 +38,7 @@ export function AssistantMessage({
       ? parsedContent.reference.content || content
       : content;
   const renderInlineTimestamp = !showIndicator && !isFileReference;
+  const hasErrorDetails = status === MessageStatus.ERROR && !!errorDetails;
 
   return (
     <div className="group flex flex-col items-start">
@@ -48,6 +51,16 @@ export function AssistantMessage({
           ) : (
             <div className="w-full rounded-xl px-3 pt-2 pb-6">
               <MarkdownRenderer content={content} isStreaming={isStreaming} />
+              {hasErrorDetails && (
+                <details className="mt-3 rounded-lg border border-[var(--vscode-inputValidation-errorBorder,var(--vscode-errorForeground))] bg-[var(--vscode-inputValidation-errorBackground,rgba(255,0,0,0.08))] px-3 py-2">
+                  <summary className="cursor-pointer text-sm text-[var(--vscode-errorForeground)]">
+                    Error details
+                  </summary>
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-[var(--vscode-errorForeground)]">
+                    {errorDetails}
+                  </pre>
+                </details>
+              )}
             </div>
           )}
           {renderInlineTimestamp && (
@@ -60,6 +73,11 @@ export function AssistantMessage({
               {status === MessageStatus.CANCELLED && (
                 <span className="text-[11px] text-[var(--vscode-descriptionForeground)] italic">
                   (cancelled)
+                </span>
+              )}
+              {status === MessageStatus.ERROR && (
+                <span className="text-[11px] text-[var(--vscode-errorForeground)] italic">
+                  (error)
                 </span>
               )}
             </div>
@@ -81,6 +99,9 @@ export function AssistantMessage({
               <span className="text-xs text-[var(--vscode-descriptionForeground)] italic">
                 (cancelled)
               </span>
+            )}
+            {status === MessageStatus.ERROR && (
+              <span className="text-xs text-[var(--vscode-errorForeground)] italic">(error)</span>
             )}
           </div>
         )}

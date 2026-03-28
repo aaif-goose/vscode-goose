@@ -45,6 +45,7 @@ function MessageItemComponent({ message, isFocused, isStreaming, onRetry }: Mess
           timestamp={message.timestamp}
           status={message.status}
           isStreaming={isStreaming}
+          errorDetails={message.errorDetails}
         />
       </div>
     );

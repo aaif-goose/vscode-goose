@@ -22,6 +22,8 @@ export enum WebviewMessageType {
   STREAM_TOKEN = 'STREAM_TOKEN',
   /** Extension signals generation is complete */
   GENERATION_COMPLETE = 'GENERATION_COMPLETE',
+  /** Extension signals generation failed */
+  GENERATION_ERROR = 'GENERATION_ERROR',
   /** Webview requests to stop generation */
   STOP_GENERATION = 'STOP_GENERATION',
   /** Extension signals generation was cancelled */
@@ -125,6 +127,12 @@ export interface StreamTokenPayload {
 /** Payload for GENERATION_COMPLETE message */
 export interface GenerationCompletePayload {
   readonly messageId: string;
+}
+
+/** Payload for GENERATION_ERROR message */
+export interface GenerationErrorPayload {
+  readonly messageId: string;
+  readonly error: string;
 }
 
 /** Payload for STOP_GENERATION message (empty payload) */
@@ -248,6 +256,7 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.SEND_MESSAGE]: SendMessagePayload;
   [WebviewMessageType.STREAM_TOKEN]: StreamTokenPayload;
   [WebviewMessageType.GENERATION_COMPLETE]: GenerationCompletePayload;
+  [WebviewMessageType.GENERATION_ERROR]: GenerationErrorPayload;
   [WebviewMessageType.STOP_GENERATION]: StopGenerationPayload;
   [WebviewMessageType.GENERATION_CANCELLED]: GenerationCancelledPayload;
   [WebviewMessageType.CHAT_HISTORY]: ChatHistoryPayload;
@@ -366,6 +375,17 @@ export function createGenerationCompleteMessage(
   return {
     type: WebviewMessageType.GENERATION_COMPLETE,
     payload: { messageId },
+  };
+}
+
+/** Create a GENERATION_ERROR message */
+export function createGenerationErrorMessage(
+  messageId: string,
+  error: string
+): WebviewMessage<WebviewMessageType.GENERATION_ERROR> {
+  return {
+    type: WebviewMessageType.GENERATION_ERROR,
+    payload: { messageId, error },
   };
 }
 
@@ -648,6 +668,13 @@ export function isGenerationCompleteMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.GENERATION_COMPLETE> {
   return isWebviewMessage(message, WebviewMessageType.GENERATION_COMPLETE);
+}
+
+/** Check if message is GENERATION_ERROR */
+export function isGenerationErrorMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.GENERATION_ERROR> {
+  return isWebviewMessage(message, WebviewMessageType.GENERATION_ERROR);
 }
 
 /** Check if message is STOP_GENERATION */

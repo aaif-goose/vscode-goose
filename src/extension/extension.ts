@@ -26,6 +26,7 @@ import {
   createErrorMessage,
   createGenerationCancelledMessage,
   createGenerationCompleteMessage,
+  createGenerationErrorMessage,
   createHistoryCompleteMessage,
   createHistoryMessage,
   createSearchResultsMessage,
@@ -388,10 +389,16 @@ function setupAcpCommunication(
         // Build prompt content blocks with resource links for context
         const promptBlocks = await buildPromptBlocks(content, contextChips, log);
 
-        const result = await client.request<PromptResponse>(AGENT_METHODS.session_prompt, {
-          sessionId: activeSessionId,
-          prompt: promptBlocks,
-        })();
+        const result = await client.request<PromptResponse>(
+          AGENT_METHODS.session_prompt,
+          {
+            sessionId: activeSessionId,
+            prompt: promptBlocks,
+          },
+          {
+            timeoutMs: null,
+          }
+        )();
 
         if (E.isLeft(result)) {
           log.error('ACP request failed:', result.left);
@@ -403,7 +410,9 @@ function setupAcpCommunication(
             )
           );
           if (currentResponseId) {
-            provider.postMessage(createGenerationCancelledMessage(currentResponseId));
+            provider.postMessage(
+              createGenerationErrorMessage(currentResponseId, result.left.message)
+            );
             currentResponseId = null;
           }
         } else {
