@@ -1,12 +1,15 @@
 import { parseContent } from '../../../shared/fileReferenceParser';
-import { MessageStatus } from '../../../shared/types';
+import { ChatContentPart, MessageStatus } from '../../../shared/types';
 import { CopyButton } from '../markdown/CopyButton';
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
 import { FileReferenceCard } from './FileReferenceCard';
 import { ProgressIndicator } from './ProgressIndicator';
+import { ThinkingBlock } from './ThinkingBlock';
+import { ToolCallCard } from './ToolCallCard';
 
 interface AssistantMessageProps {
   content: string;
+  contentParts?: readonly ChatContentPart[];
   timestamp?: Date;
   status: MessageStatus;
   isStreaming: boolean;
@@ -18,26 +21,40 @@ function formatTime(date?: Date): string {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+function getCopyText(content: string, contentParts?: readonly ChatContentPart[]): string {
+  if (!contentParts || contentParts.length === 0) return content;
+  return contentParts
+    .map(part => {
+      if (part.type === 'text') return part.text;
+      return '';
+    })
+    .join('');
+}
+
 export function AssistantMessage({
   content,
+  contentParts,
   timestamp,
   status,
   isStreaming,
   errorDetails,
 }: AssistantMessageProps) {
-  const showIndicator = isStreaming && !content;
+  const hasStructuredParts = Boolean(contentParts && contentParts.length > 0);
+  const showIndicator = isStreaming && !hasStructuredParts && !content;
 
-  // Parse content to check if it's a file reference
-  // Only parse when not streaming to avoid partial matches
-  const parsedContent = !isStreaming ? parseContent(content) : { type: 'text' as const, content };
+  // Only parse plain assistant content when we're not rendering structured parts.
+  const parsedContent =
+    !isStreaming && !hasStructuredParts
+      ? parseContent(content)
+      : ({ type: 'text', content } as const);
   const isFileReference = parsedContent.type === 'file_reference';
 
-  // Get copy text - for file references, use the file content if available
-  const copyText =
-    isFileReference && parsedContent.type === 'file_reference'
+  const copyText = hasStructuredParts
+    ? getCopyText(content, contentParts)
+    : isFileReference && parsedContent.type === 'file_reference'
       ? parsedContent.reference.content || content
       : content;
-  const renderInlineTimestamp = !showIndicator && !isFileReference;
+  const renderInlineTimestamp = !showIndicator && (!isFileReference || hasStructuredParts);
   const hasErrorDetails = status === MessageStatus.ERROR && !!errorDetails;
 
   return (
@@ -46,6 +63,28 @@ export function AssistantMessage({
         <div className="relative">
           {showIndicator ? (
             <ProgressIndicator className="py-2" />
+          ) : hasStructuredParts ? (
+            <div className="flex flex-col gap-3 rounded-xl px-3 pt-2 pb-6">
+              {contentParts.map((part, index) => {
+                if (part.type === 'text') {
+                  return (
+                    <div key={`${part.type}-${index}`} className="w-full">
+                      <MarkdownRenderer content={part.text} isStreaming={Boolean(part.streaming)} />
+                    </div>
+                  );
+                }
+
+                if (part.type === 'thinking') {
+                  return <ThinkingBlock key={`${part.type}-${index}`} part={part} />;
+                }
+
+                if (part.type === 'tool_call') {
+                  return <ToolCallCard key={part.id} part={part} />;
+                }
+
+                return null;
+              })}
+            </div>
           ) : isFileReference && parsedContent.type === 'file_reference' ? (
             <FileReferenceCard reference={parsedContent.reference} />
           ) : (
@@ -63,6 +102,7 @@ export function AssistantMessage({
               )}
             </div>
           )}
+
           {renderInlineTimestamp && (
             <div className="absolute inset-x-0 bottom-0 flex h-6 items-center gap-2 pl-3">
               <p
@@ -82,8 +122,9 @@ export function AssistantMessage({
               )}
             </div>
           )}
-          {!isStreaming && content && (
-            <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+
+          {!isStreaming && copyText && (
+            <div className="absolute -top-3 right-2 opacity-0 transition-opacity group-hover:opacity-100">
               <CopyButton text={copyText} />
             </div>
           )}

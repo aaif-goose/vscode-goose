@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import {
   isSendMessageMessage,
   isStatusUpdateMessage,
+  isThinkingDeltaMessage,
+  isToolCallStartMessage,
+  isToolCallUpdateMessage,
   isVersionStatusMessage,
   isWebviewMessage,
   WebviewMessageType,
@@ -102,5 +105,40 @@ describe('isVersionStatusMessage', () => {
 
   test('returns false for malformed object', () => {
     expect(isVersionStatusMessage({ wrongField: 'value' })).toBe(false);
+  });
+});
+
+describe('rich assistant activity messages', () => {
+  test('returns true for valid THINKING_DELTA message', () => {
+    const validMsg = {
+      type: WebviewMessageType.THINKING_DELTA,
+      payload: { messageId: 'msg-1', text: 'thinking...' },
+    };
+    expect(isThinkingDeltaMessage(validMsg)).toBe(true);
+  });
+
+  test('returns true for valid TOOL_CALL_START message', () => {
+    const validMsg = {
+      type: WebviewMessageType.TOOL_CALL_START,
+      payload: {
+        messageId: 'msg-1',
+        toolCallId: 'tool-1',
+        title: 'Read file',
+        status: 'in_progress',
+      },
+    };
+    expect(isToolCallStartMessage(validMsg)).toBe(true);
+  });
+
+  test('returns true for valid TOOL_CALL_UPDATE message', () => {
+    const validMsg = {
+      type: WebviewMessageType.TOOL_CALL_UPDATE,
+      payload: {
+        messageId: 'msg-1',
+        toolCallId: 'tool-1',
+        status: 'completed',
+      },
+    };
+    expect(isToolCallUpdateMessage(validMsg)).toBe(true);
   });
 });

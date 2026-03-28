@@ -42,6 +42,7 @@ function MessageItemComponent({ message, isFocused, isStreaming, onRetry }: Mess
       >
         <AssistantMessage
           content={message.content}
+          contentParts={message.contentParts}
           timestamp={message.timestamp}
           status={message.status}
           isStreaming={isStreaming}

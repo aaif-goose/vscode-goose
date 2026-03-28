@@ -35,6 +35,9 @@ import {
   createSessionSettingsMessage,
   createSessionsListMessage,
   createStreamTokenMessage,
+  createThinkingDeltaMessage,
+  createToolCallStartMessage,
+  createToolCallUpdateMessage,
   isCreateSessionMessage,
   isFileSearchMessage,
   isGetSessionsMessage,
@@ -235,6 +238,91 @@ async function buildPromptBlocks(
   return blocks;
 }
 
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function extractToolPresentation(content: unknown): {
+  previewLines?: string[];
+} {
+  if (!Array.isArray(content)) return {};
+
+  const lines = content.flatMap(item => {
+    if (!item || typeof item !== 'object') return [];
+
+    const contentItem = item as Record<string, unknown>;
+    if (contentItem.type === 'content') {
+      const block = contentItem.content as Record<string, unknown> | undefined;
+      if (block?.type === 'text' && typeof block.text === 'string') {
+        return block.text
+          .split('\n')
+          .map(line => line.trimEnd())
+          .filter(Boolean);
+      }
+    }
+
+    if (contentItem.type === 'diff') {
+      const path = typeof contentItem.path === 'string' ? contentItem.path : 'unknown';
+      return [`diff: ${path}`];
+    }
+
+    if (contentItem.type === 'terminal') {
+      const terminalId =
+        typeof contentItem.terminalId === 'string' ? contentItem.terminalId : 'unknown';
+      return [`terminal: ${terminalId}`];
+    }
+
+    return [];
+  });
+
+  if (lines.length === 0) return {};
+
+  const previewLines = lines.slice(0, 6).map(line => truncateText(line, 160));
+  return {
+    previewLines,
+  };
+}
+
+function summarizeSessionUpdate(update: SessionNotification['update']): Record<string, unknown> {
+  const base = {
+    sessionUpdate: update.sessionUpdate,
+  };
+
+  if ('content' in update && !Array.isArray(update.content)) {
+    return {
+      ...base,
+      contentType: update.content.type,
+      textPreview: update.content.type === 'text' ? update.content.text.slice(0, 120) : undefined,
+    };
+  }
+
+  if (update.sessionUpdate === 'tool_call') {
+    return {
+      ...base,
+      toolCallId: update.toolCallId,
+      title: update.title,
+      status: update.status,
+      kind: update.kind,
+    };
+  }
+
+  if (update.sessionUpdate === 'tool_call_update') {
+    return {
+      ...base,
+      toolCallId: update.toolCallId,
+      title: update.title,
+      status: update.status,
+      kind: update.kind,
+      hasRawInput: update.rawInput !== undefined,
+      hasRawOutput: update.rawOutput !== undefined,
+      contentItems: Array.isArray(update.content) ? update.content.length : 0,
+    };
+  }
+
+  return base;
+}
+
 async function initializeAcpSession(
   client: JsonRpcClient,
   workingDirectory: string,
@@ -333,17 +421,69 @@ function setupAcpCommunication(
     const params = notification.params as SessionNotification | undefined;
 
     if (method === 'session/update' && params?.update) {
+      log.debug('ACP session/update received', {
+        sessionId: params.sessionId,
+        responseId: currentResponseId,
+        update: summarizeSessionUpdate(params.update),
+      });
+
       const { sessionUpdate } = params.update;
+
+      if (!currentResponseId) return;
 
       if (
         sessionUpdate === 'agent_message_chunk' &&
-        currentResponseId &&
         'content' in params.update &&
         !Array.isArray(params.update.content) &&
         params.update.content.type === 'text'
       ) {
         provider.postMessage(
           createStreamTokenMessage(currentResponseId, params.update.content.text, false)
+        );
+        return;
+      }
+
+      if (
+        sessionUpdate === 'agent_thought_chunk' &&
+        'content' in params.update &&
+        !Array.isArray(params.update.content) &&
+        params.update.content.type === 'text'
+      ) {
+        provider.postMessage(
+          createThinkingDeltaMessage(currentResponseId, params.update.content.text)
+        );
+        return;
+      }
+
+      if (sessionUpdate === 'tool_call') {
+        provider.postMessage(
+          createToolCallStartMessage(
+            currentResponseId,
+            params.update.toolCallId,
+            params.update.title,
+            params.update.status,
+            {
+              kind: params.update.kind,
+              rawInput: params.update.rawInput,
+              locations: params.update.locations,
+            }
+          )
+        );
+        return;
+      }
+
+      if (sessionUpdate === 'tool_call_update') {
+        const presentation = extractToolPresentation(params.update.content);
+        provider.postMessage(
+          createToolCallUpdateMessage(currentResponseId, params.update.toolCallId, {
+            title: params.update.title ?? undefined,
+            status: params.update.status ?? undefined,
+            kind: params.update.kind ?? undefined,
+            rawInput: params.update.rawInput,
+            rawOutput: params.update.rawOutput,
+            contentPreview: presentation.previewLines,
+            locations: params.update.locations ?? undefined,
+          })
         );
       }
     }
@@ -416,7 +556,10 @@ function setupAcpCommunication(
             currentResponseId = null;
           }
         } else {
-          log.info(`Generation completed with stopReason: ${result.right.stopReason}`);
+          log.info(`Generation completed with stopReason: ${result.right.stopReason}`, {
+            responseId: currentResponseId,
+            sessionId: activeSessionId,
+          });
           if (currentResponseId) {
             if (result.right.stopReason === 'cancelled') {
               provider.postMessage(createGenerationCancelledMessage(currentResponseId));
