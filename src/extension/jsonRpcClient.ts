@@ -27,13 +27,18 @@ export interface JsonRpcClientConfig {
   readonly timeoutMs?: number;
 }
 
+/** Per-request overrides for JSON-RPC calls */
+export interface JsonRpcRequestOptions {
+  readonly timeoutMs?: number | null;
+}
+
 /** Pending request tracking */
 interface PendingRequestEntry {
   readonly id: number;
   readonly method: string;
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: JsonRpcError | JsonRpcTimeoutError) => void;
-  readonly timer: ReturnType<typeof setTimeout>;
+  readonly timer: ReturnType<typeof setTimeout> | null;
 }
 
 /** Notification callback type */
@@ -43,7 +48,8 @@ export type NotificationCallback = (notification: JsonRpcNotification) => void;
 export interface JsonRpcClient {
   readonly request: <T>(
     method: string,
-    params?: unknown
+    params?: unknown,
+    options?: JsonRpcRequestOptions
   ) => TE.TaskEither<JsonRpcError | JsonRpcTimeoutError, T>;
 
   readonly notify: (method: string, params?: unknown) => E.Either<JsonRpcParseError, void>;
@@ -75,7 +81,9 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
       if ('id' in message && message.id !== undefined) {
         const pending = pendingRequests.get(message.id);
         if (pending) {
-          clearTimeout(pending.timer);
+          if (pending.timer) {
+            clearTimeout(pending.timer);
+          }
           pendingRequests.delete(message.id);
 
           const response = message as JsonRpcResponse;
@@ -125,7 +133,8 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
 
   const request = <T>(
     method: string,
-    params?: unknown
+    params?: unknown,
+    options?: JsonRpcRequestOptions
   ): TE.TaskEither<JsonRpcError | JsonRpcTimeoutError, T> => {
     return () =>
       new Promise(resolve => {
@@ -135,6 +144,7 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
         }
 
         const id = nextId++;
+        const requestTimeoutMs = options?.timeoutMs !== undefined ? options.timeoutMs : timeoutMs;
 
         const rpcRequest: JsonRpcRequest = {
           jsonrpc: '2.0',
@@ -143,13 +153,16 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
           ...(params !== undefined && { params }),
         };
 
-        const timer = setTimeout(() => {
-          const pending = pendingRequests.get(id);
-          if (pending) {
-            pendingRequests.delete(id);
-            resolve(E.left(createJsonRpcTimeoutError(method, timeoutMs, id)));
-          }
-        }, timeoutMs);
+        const timer =
+          requestTimeoutMs === null
+            ? null
+            : setTimeout(() => {
+                const pending = pendingRequests.get(id);
+                if (pending) {
+                  pendingRequests.delete(id);
+                  resolve(E.left(createJsonRpcTimeoutError(method, requestTimeoutMs, id)));
+                }
+              }, requestTimeoutMs);
 
         const entry: PendingRequestEntry = {
           id,
@@ -166,7 +179,9 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
 
         stdin.write(requestLine, err => {
           if (err) {
-            clearTimeout(timer);
+            if (timer) {
+              clearTimeout(timer);
+            }
             pendingRequests.delete(id);
             resolve(E.left(createJsonRpcError(-32000, `Write error: ${err.message}`)));
           }
@@ -208,7 +223,9 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
     stdout.removeListener('data', onData);
 
     for (const [id, entry] of pendingRequests) {
-      clearTimeout(entry.timer);
+      if (entry.timer) {
+        clearTimeout(entry.timer);
+      }
       entry.reject(createJsonRpcError(-32000, 'Client disposed'));
       pendingRequests.delete(id);
     }
