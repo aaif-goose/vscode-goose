@@ -175,6 +175,7 @@ export interface ChatMessage {
   readonly timestamp?: Date; // Optional - undefined for history messages loaded from server
   readonly status: MessageStatus;
   readonly originalContent?: string;
+  readonly errorDetails?: string;
   readonly context?: readonly MessageContext[]; // Attached file/resource references
   readonly contentParts?: readonly ChatContentPart[];
 }

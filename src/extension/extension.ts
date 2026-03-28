@@ -26,6 +26,7 @@ import {
   createErrorMessage,
   createGenerationCancelledMessage,
   createGenerationCompleteMessage,
+  createGenerationErrorMessage,
   createHistoryCompleteMessage,
   createHistoryMessage,
   createSearchResultsMessage,
@@ -237,8 +238,15 @@ async function buildPromptBlocks(
   return blocks;
 }
 
-function extractToolPreviewLines(content: unknown): string[] | undefined {
-  if (!Array.isArray(content)) return undefined;
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function extractToolPresentation(content: unknown): {
+  previewLines?: string[];
+} {
+  if (!Array.isArray(content)) return {};
 
   const lines = content.flatMap(item => {
     if (!item || typeof item !== 'object') return [];
@@ -247,7 +255,10 @@ function extractToolPreviewLines(content: unknown): string[] | undefined {
     if (contentItem.type === 'content') {
       const block = contentItem.content as Record<string, unknown> | undefined;
       if (block?.type === 'text' && typeof block.text === 'string') {
-        return block.text.split('\n').filter(Boolean);
+        return block.text
+          .split('\n')
+          .map(line => line.trimEnd())
+          .filter(Boolean);
       }
     }
 
@@ -265,7 +276,12 @@ function extractToolPreviewLines(content: unknown): string[] | undefined {
     return [];
   });
 
-  return lines.length > 0 ? lines : undefined;
+  if (lines.length === 0) return {};
+
+  const previewLines = lines.slice(0, 6).map(line => truncateText(line, 160));
+  return {
+    previewLines,
+  };
 }
 
 function summarizeSessionUpdate(update: SessionNotification['update']): Record<string, unknown> {
@@ -457,6 +473,7 @@ function setupAcpCommunication(
       }
 
       if (sessionUpdate === 'tool_call_update') {
+        const presentation = extractToolPresentation(params.update.content);
         provider.postMessage(
           createToolCallUpdateMessage(currentResponseId, params.update.toolCallId, {
             title: params.update.title ?? undefined,
@@ -464,7 +481,7 @@ function setupAcpCommunication(
             kind: params.update.kind ?? undefined,
             rawInput: params.update.rawInput,
             rawOutput: params.update.rawOutput,
-            contentPreview: extractToolPreviewLines(params.update.content),
+            contentPreview: presentation.previewLines,
             locations: params.update.locations ?? undefined,
           })
         );
@@ -512,10 +529,16 @@ function setupAcpCommunication(
         // Build prompt content blocks with resource links for context
         const promptBlocks = await buildPromptBlocks(content, contextChips, log);
 
-        const result = await client.request<PromptResponse>(AGENT_METHODS.session_prompt, {
-          sessionId: activeSessionId,
-          prompt: promptBlocks,
-        })();
+        const result = await client.request<PromptResponse>(
+          AGENT_METHODS.session_prompt,
+          {
+            sessionId: activeSessionId,
+            prompt: promptBlocks,
+          },
+          {
+            timeoutMs: null,
+          }
+        )();
 
         if (E.isLeft(result)) {
           log.error('ACP request failed:', result.left);
@@ -527,7 +550,9 @@ function setupAcpCommunication(
             )
           );
           if (currentResponseId) {
-            provider.postMessage(createGenerationCancelledMessage(currentResponseId));
+            provider.postMessage(
+              createGenerationErrorMessage(currentResponseId, result.left.message)
+            );
             currentResponseId = null;
           }
         } else {

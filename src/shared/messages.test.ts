@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  isThinkingDeltaMessage,
   isSendMessageMessage,
   isStatusUpdateMessage,
+  isThinkingDeltaMessage,
   isToolCallStartMessage,
   isToolCallUpdateMessage,
   isVersionStatusMessage,

@@ -7,6 +7,7 @@ import {
   isChatHistoryMessage,
   isGenerationCancelledMessage,
   isGenerationCompleteMessage,
+  isGenerationErrorMessage,
   isHistoryMessage,
   isSessionCreatedMessage,
   isStreamTokenMessage,
@@ -64,6 +65,7 @@ type ChatAction =
       };
     }
   | { type: 'COMPLETE_GENERATION'; payload: { messageId: string } }
+  | { type: 'ERROR_GENERATION'; payload: { messageId: string; error: string } }
   | { type: 'CANCEL_GENERATION'; payload: { messageId: string } }
   | { type: 'SET_MESSAGES'; payload: ChatMessage[] }
   | { type: 'SET_FOCUSED_INDEX'; payload: number | null }
@@ -303,6 +305,22 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         currentResponseId: null,
       };
 
+    case 'ERROR_GENERATION':
+      return {
+        ...state,
+        messages: state.messages.map(msg =>
+          msg.id === action.payload.messageId
+            ? {
+                ...msg,
+                status: MessageStatus.ERROR,
+                errorDetails: action.payload.error,
+              }
+            : msg
+        ),
+        isGenerating: false,
+        currentResponseId: null,
+      };
+
     case 'CANCEL_GENERATION':
       return {
         ...state,
@@ -438,6 +456,14 @@ export function useChat(): UseChatReturn {
         dispatch({
           type: 'COMPLETE_GENERATION',
           payload: { messageId: message.payload.messageId },
+        });
+      } else if (isGenerationErrorMessage(message)) {
+        dispatch({
+          type: 'ERROR_GENERATION',
+          payload: {
+            messageId: message.payload.messageId,
+            error: message.payload.error,
+          },
         });
       } else if (isGenerationCancelledMessage(message)) {
         dispatch({
