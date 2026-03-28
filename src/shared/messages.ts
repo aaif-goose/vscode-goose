@@ -4,7 +4,7 @@
 
 import { ContextChip, FileSearchResult } from './contextTypes';
 import { SessionEntry, SessionSettingsState } from './sessionTypes';
-import { ChatMessage, ProcessStatus } from './types';
+import { ChatMessage, ProcessStatus, ToolCallLocation } from './types';
 
 /** Types of messages that can be sent between webview and extension */
 export enum WebviewMessageType {
@@ -20,6 +20,12 @@ export enum WebviewMessageType {
   SEND_MESSAGE = 'SEND_MESSAGE',
   /** Extension streams a response token to webview */
   STREAM_TOKEN = 'STREAM_TOKEN',
+  /** Extension streams assistant thinking text to webview */
+  THINKING_DELTA = 'THINKING_DELTA',
+  /** Extension reports a tool call start to webview */
+  TOOL_CALL_START = 'TOOL_CALL_START',
+  /** Extension reports a tool call update to webview */
+  TOOL_CALL_UPDATE = 'TOOL_CALL_UPDATE',
   /** Extension signals generation is complete */
   GENERATION_COMPLETE = 'GENERATION_COMPLETE',
   /** Webview requests to stop generation */
@@ -120,6 +126,36 @@ export interface StreamTokenPayload {
   readonly messageId: string;
   readonly token: string;
   readonly done: boolean;
+}
+
+/** Payload for THINKING_DELTA message */
+export interface ThinkingDeltaPayload {
+  readonly messageId: string;
+  readonly text: string;
+}
+
+/** Payload for TOOL_CALL_START message */
+export interface ToolCallStartPayload {
+  readonly messageId: string;
+  readonly toolCallId: string;
+  readonly title: string;
+  readonly status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  readonly kind?: string;
+  readonly rawInput?: unknown;
+  readonly locations?: readonly ToolCallLocation[];
+}
+
+/** Payload for TOOL_CALL_UPDATE message */
+export interface ToolCallUpdatePayload {
+  readonly messageId: string;
+  readonly toolCallId: string;
+  readonly title?: string;
+  readonly status?: 'pending' | 'in_progress' | 'completed' | 'failed';
+  readonly kind?: string;
+  readonly rawInput?: unknown;
+  readonly rawOutput?: unknown;
+  readonly contentPreview?: readonly string[];
+  readonly locations?: readonly ToolCallLocation[];
 }
 
 /** Payload for GENERATION_COMPLETE message */
@@ -247,6 +283,9 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.ERROR]: ErrorPayload;
   [WebviewMessageType.SEND_MESSAGE]: SendMessagePayload;
   [WebviewMessageType.STREAM_TOKEN]: StreamTokenPayload;
+  [WebviewMessageType.THINKING_DELTA]: ThinkingDeltaPayload;
+  [WebviewMessageType.TOOL_CALL_START]: ToolCallStartPayload;
+  [WebviewMessageType.TOOL_CALL_UPDATE]: ToolCallUpdatePayload;
   [WebviewMessageType.GENERATION_COMPLETE]: GenerationCompletePayload;
   [WebviewMessageType.STOP_GENERATION]: StopGenerationPayload;
   [WebviewMessageType.GENERATION_CANCELLED]: GenerationCancelledPayload;
@@ -356,6 +395,73 @@ export function createStreamTokenMessage(
   return {
     type: WebviewMessageType.STREAM_TOKEN,
     payload: { messageId, token, done },
+  };
+}
+
+/** Create a THINKING_DELTA message */
+export function createThinkingDeltaMessage(
+  messageId: string,
+  text: string
+): WebviewMessage<WebviewMessageType.THINKING_DELTA> {
+  return {
+    type: WebviewMessageType.THINKING_DELTA,
+    payload: { messageId, text },
+  };
+}
+
+/** Create a TOOL_CALL_START message */
+export function createToolCallStartMessage(
+  messageId: string,
+  toolCallId: string,
+  title: string,
+  status: ToolCallStartPayload['status'],
+  options?: {
+    kind?: string;
+    rawInput?: unknown;
+    locations?: readonly ToolCallLocation[];
+  }
+): WebviewMessage<WebviewMessageType.TOOL_CALL_START> {
+  return {
+    type: WebviewMessageType.TOOL_CALL_START,
+    payload: {
+      messageId,
+      toolCallId,
+      title,
+      status,
+      kind: options?.kind,
+      rawInput: options?.rawInput,
+      locations: options?.locations,
+    },
+  };
+}
+
+/** Create a TOOL_CALL_UPDATE message */
+export function createToolCallUpdateMessage(
+  messageId: string,
+  toolCallId: string,
+  options?: {
+    title?: string;
+    status?: ToolCallUpdatePayload['status'];
+    kind?: string;
+    rawInput?: unknown;
+    rawOutput?: unknown;
+    contentPreview?: readonly string[];
+    locations?: readonly ToolCallLocation[];
+  }
+): WebviewMessage<WebviewMessageType.TOOL_CALL_UPDATE> {
+  return {
+    type: WebviewMessageType.TOOL_CALL_UPDATE,
+    payload: {
+      messageId,
+      toolCallId,
+      title: options?.title,
+      status: options?.status,
+      kind: options?.kind,
+      rawInput: options?.rawInput,
+      rawOutput: options?.rawOutput,
+      contentPreview: options?.contentPreview,
+      locations: options?.locations,
+    },
   };
 }
 
@@ -641,6 +747,27 @@ export function isStreamTokenMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.STREAM_TOKEN> {
   return isWebviewMessage(message, WebviewMessageType.STREAM_TOKEN);
+}
+
+/** Check if message is THINKING_DELTA */
+export function isThinkingDeltaMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.THINKING_DELTA> {
+  return isWebviewMessage(message, WebviewMessageType.THINKING_DELTA);
+}
+
+/** Check if message is TOOL_CALL_START */
+export function isToolCallStartMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.TOOL_CALL_START> {
+  return isWebviewMessage(message, WebviewMessageType.TOOL_CALL_START);
+}
+
+/** Check if message is TOOL_CALL_UPDATE */
+export function isToolCallUpdateMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.TOOL_CALL_UPDATE> {
+  return isWebviewMessage(message, WebviewMessageType.TOOL_CALL_UPDATE);
 }
 
 /** Check if message is GENERATION_COMPLETE */
