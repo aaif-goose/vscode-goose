@@ -2,12 +2,12 @@
 
 **Type**: Single Project
 **Languages**: TypeScript, TSX (React)
-**Version**: 0.1.0
-**Updated**: 2025-12-21
+**Version**: 0.2.1
+**Updated**: 2026-03-28
 
 ## Project Summary
 
-VS Code extension providing a thin UI bridge to Goose AI agent via Agent Communication Protocol (ACP). Enables chat-based coding assistance with context attachment, file search, and session management directly within VS Code.
+VS Code extension providing a thin UI bridge to Goose AI agent via Agent Communication Protocol (ACP). Enables chat-based coding assistance with context attachment, file search, persistent sessions, live mode/model selection, and structured streaming for thinking/tool-call activity directly within VS Code.
 
 ## Quick Reference
 
@@ -16,6 +16,7 @@ VS Code extension providing a thin UI bridge to Goose AI agent via Agent Communi
 | Entry Point | `src/extension/extension.ts` |
 | Key Pattern | Bridge/Adapter with Message-Driven Communication |
 | Tech Stack | TypeScript, React 19, Tailwind CSS 4, fp-ts, Bun |
+| UI Highlights | Right-side history pane, context chips, structured assistant stream |
 
 ## KB File Manifest
 
@@ -66,10 +67,11 @@ src/
 │   │   ├── picker/       # FilePicker dropdown
 │   │   └── session/      # SessionHeader, SessionList
 └── shared/         # Shared types between extension/webview
-    ├── messages.ts       # 24 WebviewMessage types
-    ├── types.ts          # ProcessStatus, ChatMessage
+    ├── messages.ts       # Typed webview protocol including thinking/tool-call/session-setting messages
+    ├── types.ts          # ProcessStatus, ChatMessage, structured assistant content parts
     ├── errors.ts         # GooseError discriminated union
     ├── contextTypes.ts   # ContextChip, FileSearchResult
+    ├── sessionTypes.ts   # Session metadata and mode/model selector state
     └── fileReferenceParser.ts # Parse file refs from markdown
 ```
 
@@ -78,7 +80,9 @@ src/
 - **Context Chips**: Attach files/selections via @ picker or Cmd+Shift+G
 - **Version Gating**: Validates goose >= 1.16.0 before activation
 - **Session Management**: Persistent sessions with history replay
-- **Streaming Responses**: Token-by-token AI response display
+- **Session Settings**: Mode/model selectors backed by ACP session metadata
+- **Streaming Responses**: Token-by-token text plus thinking and tool-call activity
+- **Responsive History Pane**: Animated right-side panel with resize/overlay behavior
 - **fp-ts Error Handling**: TaskEither for typed async errors
 
 ## Navigation

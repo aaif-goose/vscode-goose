@@ -15,7 +15,7 @@
 - `ERROR`: Process crashed or failed to start
 
 ### ChatMessage
-**Definition**: Core data structure representing a single message in the chat conversation. Contains id, role (user/assistant/error), content, timestamp, status, and optional context attachments.
+**Definition**: Core data structure representing a single message in the chat conversation. Contains id, role (user/assistant/error), content, timestamp, status, optional context attachments, and optional structured assistant content parts.
 **Implementation**: `src/shared/types.ts`
 **Key Properties**:
 - `id`: Unique identifier for message correlation
@@ -25,6 +25,7 @@
 - `status`: MessageStatus tracking lifecycle state
 - `originalContent`: For error messages, stores original message for retry
 - `context`: Optional array of MessageContext for attached file references
+- `contentParts`: Ordered assistant stream parts for text, thinking, and tool-call rendering
 
 **Business Rules**:
 - User messages are always status=COMPLETE
@@ -78,6 +79,33 @@
 **Definition**: Stored session metadata containing sessionId, title, cwd (working directory), and createdAt timestamp. Represents a persisted conversation session that can be resumed.
 **Implementation**: `src/shared/sessionTypes.ts`
 
+### SessionSettingsState
+**Definition**: Webview-facing representation of live ACP session settings for the active session. Currently includes optional mode and model selectors.
+**Implementation**: `src/shared/sessionTypes.ts`
+**Relationships**:
+- Produced by `sessionManager.ts` from ACP `modes`, `models`, and `configOptions`
+- Sent to the webview through the `SESSION_SETTINGS` message
+- Rendered by `SessionSettingsBar` in the composer
+
+### ChatContentPart
+**Definition**: Structured assistant output unit rendered in order within a single assistant message.
+**Implementation**: `src/shared/types.ts`
+**Variants**:
+- `text`: Standard assistant markdown/text output
+- `thinking`: Hidden or supplemental reasoning text streamed separately from answer text
+- `tool_call`: Tool lifecycle summary including status, preview content, and optional raw I/O
+
+### ToolCallPart
+**Definition**: Specialized `ChatContentPart` representing a tool execution shown in the assistant transcript.
+**Implementation**: `src/shared/types.ts`
+**Key Properties**:
+- `id`: Tool call identifier from ACP
+- `title`: Human-readable tool/action title
+- `status`: `pending`, `in_progress`, `completed`, or `failed`
+- `rawInput` / `rawOutput`: Raw structured payloads when provided
+- `contentPreview`: Short extracted preview lines for quick scanning
+- `locations`: Optional source file references connected to the tool call
+
 ### AgentCapabilities
 **Definition**: Describes ACP agent capabilities received from initialize response. Tracks loadSession support and promptCapabilities (image, audio, embeddedContext).
 **Implementation**: `src/shared/sessionTypes.ts`
@@ -107,12 +135,13 @@
 ### WebviewMessage Protocol
 **Purpose**: Typed message passing between extension host and React webview
 **Implementation**: `src/shared/messages.ts`
-**Message Types** (24 total):
+**Representative Message Families**:
 - Core: WEBVIEW_READY, STATUS_UPDATE, GET_STATUS, ERROR
-- Chat: SEND_MESSAGE, STREAM_TOKEN, GENERATION_COMPLETE, STOP_GENERATION, GENERATION_CANCELLED
+- Chat: SEND_MESSAGE, STREAM_TOKEN, THINKING_DELTA, TOOL_CALL_START, TOOL_CALL_UPDATE, GENERATION_COMPLETE, STOP_GENERATION, GENERATION_CANCELLED
 - Session: CREATE_SESSION, SESSION_CREATED, GET_SESSIONS, SESSIONS_LIST, SELECT_SESSION, SESSION_LOADED
 - History: CHAT_HISTORY, HISTORY_MESSAGE, HISTORY_COMPLETE
 - Context: ADD_CONTEXT_CHIP, FILE_SEARCH, SEARCH_RESULTS, FOCUS_CHAT_INPUT
+- Settings: SESSION_SETTINGS, SET_SESSION_MODE, SET_SESSION_MODEL
 - Version: VERSION_STATUS
 - Links: OPEN_EXTERNAL_LINK
 
@@ -138,6 +167,9 @@ pipe(
 - **@ Mention**: Typing @ at word boundary to activate file picker autocomplete
 - **File Picker**: Dropdown for searching and selecting workspace files
 - **Streaming Token**: Incremental text chunk from Goose during response generation
+- **Thinking Chunk**: Incremental reasoning-style text streamed separately from the final assistant answer
+- **Tool Call Card**: Collapsible UI block showing a tool execution and its details
+- **Session Settings Bar**: Composer-area controls for mode/model selection
 - **History Replay**: Loading and displaying past session messages when switching sessions
 
 ### Technical Terms

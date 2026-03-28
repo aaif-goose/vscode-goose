@@ -29,12 +29,29 @@ src/
 │   ├── App.tsx
 │   ├── bridge.ts
 │   ├── hooks/
+│   │   ├── useChat.ts
+│   │   ├── useSession.ts
+│   │   ├── useContextChips.ts
+│   │   └── useFilePicker.ts
 │   └── components/
+│       ├── chat/
+│       │   ├── SessionSettingsBar.tsx
+│       │   ├── ThinkingBlock.tsx
+│       │   └── ToolCallCard.tsx
+│       └── session/
 └── shared/             # Shared types between extension/webview
     ├── messages.ts
     ├── types.ts
+    ├── sessionTypes.ts
     └── errors.ts
 ```
+
+Recent UI work worth knowing before making changes:
+
+- `App.tsx` owns the animated right-side history pane and responsive split/overlay behavior.
+- `useChat.ts` assembles assistant replies from structured stream parts instead of plain text only.
+- `InputArea.tsx` now hosts session mode/model selectors via `SessionSettingsBar`.
+- `extension.ts` translates ACP session updates into webview messages for text, thinking, tool calls, and session settings.
 
 ## Build Process
 
@@ -183,6 +200,12 @@ Registered commands accessible via Command Palette:
 | Goose: Show Logs | `goose.showLogs` | Open output channel |
 | Goose: Restart | `goose.restart` | Restart goose subprocess |
 | Send to Goose | `goose.sendSelectionToChat` | Send selection to chat (Cmd+Shift+G) |
+
+## ACP/Streaming Notes
+
+- `session/prompt` requests are sent with `timeoutMs: null` in `JsonRpcClient`, so long-running prompts should not time out locally.
+- Assistant output can arrive as plain text chunks, thinking chunks, and tool-call lifecycle events.
+- Session metadata can include selectable mode/model settings that are mirrored into the composer UI and updated through ACP methods.
 
 ## Debugging
 

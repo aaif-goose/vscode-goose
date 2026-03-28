@@ -18,11 +18,15 @@ Attach multiple files or code selections to your messages. Visual chips show exa
 
 ### Session Management
 
-Pick up where you left off. Your conversations persist across VS Code sessions with full history—browse past chats organized by time and switch between sessions instantly.
+Pick up where you left off. Your conversations persist across VS Code sessions with full history—browse past chats in a dedicated right-side history pane, grouped by time, and switch between sessions instantly.
 
 ### Streaming Responses
 
-See Goose think in real-time. Responses stream token-by-token with syntax-highlighted code blocks and one-click copy.
+See Goose work in real-time. Responses can stream answer text, thinking traces, and tool-call activity with syntax-highlighted code blocks and one-click copy.
+
+### Mode and Model Controls
+
+Change session mode and model directly from the composer when Goose exposes those settings for the active session.
 
 ## Requirements
 
@@ -45,6 +49,7 @@ See Goose think in real-time. Responses stream token-by-token with syntax-highli
 1. Click the Goose icon in the Activity Bar
 2. Start typing your question
 3. Use `@` to attach files or <kbd>Cmd+Shift+G</kbd> to send selected code
+4. Adjust mode/model from the composer when available
 
 ## Usage
 
@@ -63,7 +68,8 @@ Type `@` in the chat input to search your workspace. Select a file to add it as 
 ### Manage Sessions
 
 - **New Chat**: Start a fresh conversation
-- **History**: Browse and resume past sessions grouped by Today, Yesterday, and older
+- **History**: Browse and resume past sessions from the right-side history pane
+- **Session Settings**: Change mode/model from the composer when Goose exposes them
 
 ## Keyboard Shortcuts
 
@@ -87,6 +93,7 @@ Goose reads its provider and model configuration from:
 
 - **Goose: Show Logs** — View extension logs
 - **Goose: Restart** — Restart the Goose connection
+- **Send to Goose** — Send the current editor selection or file to the chat
 
 ## Support
 
