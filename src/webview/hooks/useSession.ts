@@ -64,6 +64,7 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
         sessions: action.payload.sessions,
         activeSessionId: action.payload.activeSessionId,
         isLoading: false,
+        isLoadingHistory: false,
       };
 
     case 'SET_ACTIVE_SESSION':

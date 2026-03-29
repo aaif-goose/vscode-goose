@@ -2,7 +2,12 @@
  * Session card component for displaying a session in the list.
  */
 
-import { formatSessionTime, SessionEntry, truncatePath } from '../../../shared/sessionTypes';
+import {
+  formatSessionTime,
+  getSessionTimestamp,
+  SessionEntry,
+  truncatePath,
+} from '../../../shared/sessionTypes';
 
 interface SessionCardProps {
   session: SessionEntry;
@@ -45,7 +50,7 @@ export function SessionCard({ session, isActive, onClick }: SessionCardProps) {
             />
             <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.2" />
           </svg>
-          {formatSessionTime(session.createdAt)}
+          {formatSessionTime(getSessionTimestamp(session))}
         </span>
         <span className="flex items-center gap-1 truncate" title={session.cwd}>
           <svg
