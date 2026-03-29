@@ -21,6 +21,11 @@ export function getGooseBinaryPath(): O.Option<string> {
   );
 }
 
+/** Whether the configured binary path explicitly requests mock mode */
+export function isMockBinaryPath(path: string | undefined): boolean {
+  return path?.trim().toLowerCase() === 'mock';
+}
+
 /** Get the configured log level, defaulting to INFO */
 export function getLogLevel(): LogLevel {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);

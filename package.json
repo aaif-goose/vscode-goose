@@ -45,7 +45,7 @@
         "goose.binaryPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the goose binary. Leave empty for auto-detection."
+          "description": "Path to the goose binary. Leave empty for auto-detection, or set to 'mock' to force mock streaming mode."
         },
         "goose.logLevel": {
           "type": "string",

@@ -52,7 +52,13 @@ import { DEFAULT_CAPABILITIES, SessionEntry } from '../shared/sessionTypes';
 import { JsonRpcNotification, ProcessStatus } from '../shared/types';
 import { discoverBinary } from './binaryDiscovery';
 import { registerCommands, registerContextCommands } from './commands';
-import { affectsSetting, getBinaryDiscoveryConfig, getLogLevel, onConfigChange } from './config';
+import {
+  affectsSetting,
+  getBinaryDiscoveryConfig,
+  getLogLevel,
+  isMockBinaryPath,
+  onConfigChange,
+} from './config';
 import { createFileSearchService, FileSearchService } from './fileSearchService';
 import { JsonRpcClient } from './jsonRpcClient';
 import { createLogger, Logger } from './logger';
@@ -73,11 +79,91 @@ let fileSearchService: FileSearchService | null = null;
 let mockStreamingTimer: ReturnType<typeof setTimeout> | null = null;
 let mockStreamingCancelled = false;
 
-const MOCK_RESPONSES = [
-  "I'd be happy to help you with that! Let me think about this...\n\nHere's what I suggest:\n\n1. **First step**: Start by understanding the problem\n2. **Second step**: Break it down into smaller parts\n3. **Third step**: Implement the solution\n\n```typescript\nfunction example() {\n  console.log('Hello, world!');\n}\n```\n\nLet me know if you need more details!",
-  "Great question! Here's a quick overview:\n\n- This is a **key concept** to understand\n- It works by processing data incrementally\n- The result is then returned to the caller\n\n> Note: This is just a mock response for testing the UI.\n\nWould you like me to elaborate on any part?",
-  "Sure thing! Let me explain...\n\nThe main idea here is to keep things simple and focused. Here's an example:\n\n```python\ndef greet(name):\n    return f'Hello, {name}!'\n```\n\nThis demonstrates the basic pattern. The streaming UI should show this text appearing gradually, token by token.",
+const MOCK_THINKING_RESPONSES = [
+  'Checking the workspace context and figuring out the best way to answer.\n\nI want to keep the response concise while still giving a useful next step.',
+  'Breaking the request into smaller parts.\n\nFirst I will identify what is being asked, then I will shape the final answer around the most relevant details.',
+  'Reviewing the prompt and planning a response.\n\nI am looking for the clearest explanation and a small example if it helps.',
 ];
+
+const MOCK_TOOL_CALLS = [
+  {
+    title: 'Shell',
+    kind: 'shell',
+    rawInput: {
+      command: 'Get-ChildItem src\\webview\\components\\chat',
+      workdir: 'e:\\dev\\writing-dev-tools\\vscode-goose',
+      timeout_ms: 10000,
+    },
+    contentPreview: ['AssistantMessage.tsx', 'ThinkingBlock.tsx', 'ToolCallCard.tsx'],
+    rawOutput: {
+      exitCode: 0,
+      stdoutPreview: ['AssistantMessage.tsx', 'ThinkingBlock.tsx', 'ToolCallCard.tsx'],
+    },
+    finalStatus: 'completed' as const,
+  },
+  {
+    title: 'Search workspace files',
+    kind: 'search',
+    rawInput: { query: 'thinking message UX', limit: 5 },
+    contentPreview: [
+      'src/webview/hooks/useChat.ts',
+      'src/webview/components/chat/ThinkingBlock.tsx',
+      'src/extension/extension.ts',
+    ],
+    rawOutput: {
+      matches: 3,
+      topResult: 'src/webview/hooks/useChat.ts',
+    },
+    finalStatus: 'completed' as const,
+  },
+  {
+    title: 'Read project documentation',
+    kind: 'read',
+    rawInput: { path: 'docs/DEVELOPMENT.md' },
+    contentPreview: [
+      'Attempting to read docs/DEVELOPMENT.md',
+      'The mock is simulating a failure for this tool call',
+      'This gives the UI a failed tool-state example',
+    ],
+    rawOutput: {
+      code: 'ENOENT',
+      message: 'Mock file read failed for docs/DEVELOPMENT.md',
+    },
+    finalStatus: 'failed' as const,
+  },
+];
+
+const MOCK_FAILED_TOOL_CALL = MOCK_TOOL_CALLS[MOCK_TOOL_CALLS.length - 1];
+
+const MOCK_RESPONSE_SCENARIOS = [
+  {
+    successfulToolCall: MOCK_TOOL_CALLS[0],
+    intro:
+      'I’m going to inspect the chat UI pieces first, then I’ll summarize what I found.\n\nI’ll start with a shell-style check of the relevant components.\n\n',
+    middle:
+      'The shell results confirm the main chat components are present.\n\nNext I want to verify the docs path and deliberately surface a failed tool state in the UI.\n\n',
+    outro:
+      "Here’s the summary:\n\n1. **Thinking UI** is wired into the chat renderer.\n2. **Tool calls** can appear inline with assistant output.\n3. **Failure states** still keep the response moving.\n\n```typescript\nfunction example() {\n  console.log('Mock mode now shows tool activity clearly');\n}\n```\n\nLet me know if you want me to simulate a different workflow.\n",
+  },
+  {
+    successfulToolCall: MOCK_TOOL_CALLS[1],
+    intro:
+      'I’ll walk through this in a couple of steps so the flow is easy to follow.\n\nFirst I’m going to search the workspace for the chat-related files.\n\n',
+    middle:
+      'That search gave me the files I expected.\n\nI’m also checking the docs path so we can see how the UI handles a tool that does not succeed.\n\n',
+    outro:
+      'With that context, the important behavior is:\n\n- assistant text can stream before and after tool activity\n- tool cards can stay visible while they are running\n- failures can be shown without interrupting the rest of the answer\n\nWould you like me to add a mock diff or file-edit tool next?\n',
+  },
+  {
+    successfulToolCall: MOCK_TOOL_CALLS[0],
+    intro:
+      'I’m going to gather a little context before answering directly.\n\nFirst up is a shell inspection of the chat components so we can see a longer-running tool in progress.\n\n',
+    middle:
+      'The initial inspection looks good.\n\nI’ll try one more tool call that intentionally fails so we can validate that state in the interface too.\n\n',
+    outro:
+      'After both tool calls, the overall result is still straightforward:\n\nThe mock agent can now show thinking, long-running tools, failed tools, and normal response text in one coherent turn.\n',
+  },
+] as const;
 
 function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
   let currentResponseId: string | null = null;
@@ -92,13 +178,164 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
       mockStreamingCancelled = false;
 
       // Pick a random mock response
-      const responseText = MOCK_RESPONSES[Math.floor(Math.random() * MOCK_RESPONSES.length)];
-      const tokens = responseText.split(/(?<=\s)|(?=\s)/); // Split on whitespace boundaries
+      const thinkingText =
+        MOCK_THINKING_RESPONSES[Math.floor(Math.random() * MOCK_THINKING_RESPONSES.length)];
+      const responseScenario =
+        MOCK_RESPONSE_SCENARIOS[Math.floor(Math.random() * MOCK_RESPONSE_SCENARIOS.length)];
+      const thinkingTokens = thinkingText.split(/(?<=\s)|(?=\s)/);
+      const introTokens = responseScenario.intro.split(/(?<=\s)|(?=\s)/);
+      const middleTokens = responseScenario.middle.split(/(?<=\s)|(?=\s)/);
+      const outroTokens = responseScenario.outro.split(/(?<=\s)|(?=\s)/);
+      const scriptedToolCalls = [
+        {
+          ...responseScenario.successfulToolCall,
+          id: `mock-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          pendingDelay: 250,
+          inProgressDelay: 1200,
+        },
+        {
+          ...MOCK_FAILED_TOOL_CALL,
+          id: `mock-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          pendingDelay: 250,
+          inProgressDelay: 1500,
+        },
+      ] as const;
 
-      let tokenIndex = 0;
+      let thinkingTokenIndex = 0;
+      let phase: 'intro' | 'tool1' | 'middle' | 'tool2' | 'outro' | 'done' = 'intro';
+      let toolCallStage: 'start' | 'update' | 'complete' | 'done' = 'start';
+
+      const scheduleNextStep = (delay: number): void => {
+        mockStreamingTimer = setTimeout(streamNextToken, delay);
+      };
+
+      const runToolCallStep = (
+        toolCall: (typeof scriptedToolCalls)[number],
+        nextPhase: typeof phase
+      ): boolean => {
+        if (!currentResponseId) return false;
+
+        if (toolCallStage === 'start') {
+          provider.postMessage(
+            createToolCallStartMessage(currentResponseId, toolCall.id, toolCall.title, 'pending', {
+              kind: toolCall.kind,
+              rawInput: toolCall.rawInput,
+            })
+          );
+          toolCallStage = 'update';
+          scheduleNextStep(toolCall.pendingDelay);
+          return true;
+        }
+
+        if (toolCallStage === 'update') {
+          provider.postMessage(
+            createToolCallUpdateMessage(currentResponseId, toolCall.id, {
+              title: toolCall.title,
+              status: 'in_progress',
+              kind: toolCall.kind,
+              rawInput: toolCall.rawInput,
+              contentPreview: toolCall.contentPreview,
+            })
+          );
+          toolCallStage = 'complete';
+          scheduleNextStep(toolCall.inProgressDelay);
+          return true;
+        }
+
+        if (toolCallStage === 'complete') {
+          provider.postMessage(
+            createToolCallUpdateMessage(currentResponseId, toolCall.id, {
+              title: toolCall.title,
+              status: toolCall.finalStatus,
+              kind: toolCall.kind,
+              rawInput: toolCall.rawInput,
+              rawOutput: toolCall.rawOutput,
+              contentPreview: toolCall.contentPreview,
+            })
+          );
+          log.info(`[Mock] Tool call ${toolCall.finalStatus}: ${toolCall.title}`);
+          toolCallStage = 'done';
+          scheduleNextStep(180);
+          return true;
+        }
+
+        phase = nextPhase;
+        toolCallStage = 'start';
+        return false;
+      };
 
       const streamNextToken = (): void => {
-        if (mockStreamingCancelled || tokenIndex >= tokens.length) {
+        if (mockStreamingCancelled) {
+          mockStreamingTimer = null;
+          currentResponseId = null;
+          return;
+        }
+
+        if (currentResponseId && thinkingTokenIndex < thinkingTokens.length) {
+          provider.postMessage(
+            createThinkingDeltaMessage(currentResponseId, thinkingTokens[thinkingTokenIndex])
+          );
+          thinkingTokenIndex++;
+
+          const delay = 20 + Math.random() * 60;
+          mockStreamingTimer = setTimeout(streamNextToken, delay);
+          return;
+        }
+
+        if (phase === 'intro' && introTokens.length > 0) {
+          if (currentResponseId) {
+            const nextToken = introTokens.shift();
+            if (nextToken !== undefined) {
+              provider.postMessage(createStreamTokenMessage(currentResponseId, nextToken, false));
+            }
+          }
+          scheduleNextStep(20 + Math.random() * 60);
+          return;
+        }
+
+        if (phase === 'intro') {
+          phase = 'tool1';
+        }
+
+        if (phase === 'tool1' && runToolCallStep(scriptedToolCalls[0], 'middle')) {
+          return;
+        }
+
+        if (phase === 'middle' && middleTokens.length > 0) {
+          if (currentResponseId) {
+            const nextToken = middleTokens.shift();
+            if (nextToken !== undefined) {
+              provider.postMessage(createStreamTokenMessage(currentResponseId, nextToken, false));
+            }
+          }
+          scheduleNextStep(20 + Math.random() * 60);
+          return;
+        }
+
+        if (phase === 'middle') {
+          phase = 'tool2';
+        }
+
+        if (phase === 'tool2' && runToolCallStep(scriptedToolCalls[1], 'outro')) {
+          return;
+        }
+
+        if (phase === 'outro' && outroTokens.length > 0) {
+          if (currentResponseId) {
+            const nextToken = outroTokens.shift();
+            if (nextToken !== undefined) {
+              provider.postMessage(createStreamTokenMessage(currentResponseId, nextToken, false));
+            }
+          }
+          scheduleNextStep(20 + Math.random() * 60);
+          return;
+        }
+
+        if (phase === 'outro') {
+          phase = 'done';
+        }
+
+        if (phase === 'done') {
           if (!mockStreamingCancelled && currentResponseId) {
             provider.postMessage(createGenerationCompleteMessage(currentResponseId));
             log.info('[Mock] Generation complete');
@@ -107,17 +344,6 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
           currentResponseId = null;
           return;
         }
-
-        if (currentResponseId) {
-          provider.postMessage(
-            createStreamTokenMessage(currentResponseId, tokens[tokenIndex], false)
-          );
-        }
-        tokenIndex++;
-
-        // Random delay between 20-80ms for realistic streaming feel
-        const delay = 20 + Math.random() * 60;
-        mockStreamingTimer = setTimeout(streamNextToken, delay);
       };
 
       // Start streaming after a small initial delay
@@ -930,7 +1156,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   fileSearchService = createFileSearchService(logger.child('FileSearch'));
   setupFileSearchHandler(webviewProvider, fileSearchService, logger.child('FileSearch'));
 
-  const binaryResult = discoverBinary(getBinaryDiscoveryConfig());
+  const binaryConfig = getBinaryDiscoveryConfig();
+  if (isMockBinaryPath(binaryConfig.userConfiguredPath)) {
+    logger.info('[Mock] Explicit mock mode enabled via goose.binaryPath');
+    webviewProvider.updateStatus(ProcessStatus.RUNNING);
+    setupMockStreaming(webviewProvider, logger.child('Mock'));
+    registerConfigChangeHandler(context);
+    logger.info('Goose extension activated.');
+    return;
+  }
+
+  const binaryResult = discoverBinary(binaryConfig);
 
   if (E.isLeft(binaryResult)) {
     const error = binaryResult.left;
