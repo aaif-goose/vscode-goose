@@ -8,11 +8,13 @@ import {
   type ConfigOptionUpdate,
   type ContentBlock,
   type CurrentModeUpdate,
+  type ListSessionsResponse,
   type LoadSessionResponse,
   type NewSessionResponse,
   type SessionConfigOption,
   type SessionConfigSelectGroup,
   type SessionConfigSelectOption,
+  type SessionInfo,
   type SessionModelState,
   type SessionModeState,
   type SessionNotification,
@@ -25,7 +27,6 @@ import {
   DEFAULT_CAPABILITIES,
   EMPTY_SESSION_SETTINGS,
   GroupedSessions,
-  generateSessionTitle,
   groupSessionsByDate,
   SessionEntry,
   SessionSelectSetting,
@@ -47,16 +48,17 @@ export interface SessionManager {
     workingDirectory: string
   ): void;
   createSession(): TE.TaskEither<GooseError, SessionEntry>;
+  listSessions(): TE.TaskEither<GooseError, readonly SessionEntry[]>;
   loadSession(sessionId: string): TE.TaskEither<GooseError, void>;
   getGroupedSessions(): GroupedSessions[];
   getSessions(): readonly SessionEntry[];
   getActiveSession(): SessionEntry | null;
   getActiveSessionId(): string | null;
   getSessionSettings(): SessionSettingsState;
-  updateSessionTitle(sessionId: string, title: string): Promise<void>;
   setSessionMode(modeId: string): TE.TaskEither<GooseError, void>;
   setSessionModel(modelId: string): TE.TaskEither<GooseError, void>;
   hasLoadSessionCapability(): boolean;
+  hasListSessionsCapability(): boolean;
   hasEmbeddedContextCapability(): boolean;
   onHistoryMessage(callback: (message: ChatMessage) => void): () => void;
   onHistoryComplete(callback: (sessionId: string, messageCount: number) => void): () => void;
@@ -68,7 +70,13 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   let client: JsonRpcClient | null = null;
   let capabilities: AgentCapabilities = DEFAULT_CAPABILITIES;
   let workingDirectory = '';
+  let sessions: SessionEntry[] = [];
   let sessionSettings: SessionSettingsState = EMPTY_SESSION_SETTINGS;
+  let replayState: {
+    sessionId: string;
+    messageCount: number;
+    isLoading: boolean;
+  } | null = null;
   const historyMessageCallbacks: ((message: ChatMessage) => void)[] = [];
   const historyCompleteCallbacks: ((sessionId: string, messageCount: number) => void)[] = [];
   const settingsChangeCallbacks: ((settings: SessionSettingsState) => void)[] = [];
@@ -206,68 +214,15 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     client = rpcClient;
     capabilities = agentCapabilities;
     workingDirectory = cwd;
-    logger.info('SessionManager initialized');
-  };
-
-  const createSession = (): TE.TaskEither<GooseError, SessionEntry> => {
-    if (!client) {
-      return TE.left(createJsonRpcError(-32000, 'Client not initialized'));
-    }
-
-    const rpcClient = client;
-
-    return pipe(
-      rpcClient.request<NewSessionResponse>(AGENT_METHODS.session_new, {
-        cwd: workingDirectory,
-        mcpServers: [],
-      }),
-      TE.map(response => {
-        const session: SessionEntry = {
-          sessionId: response.sessionId,
-          title: 'New Session',
-          cwd: workingDirectory,
-          createdAt: new Date().toISOString(),
-        };
-
-        storage.addSession(session);
-        storage.setActiveSession(session.sessionId);
-        setSessionSettings(response.modes, response.models, response.configOptions);
-
-        logger.info(`Created session: ${session.sessionId}`);
-        return session;
-      })
-    );
-  };
-
-  const loadSession = (sessionId: string): TE.TaskEither<GooseError, void> => {
-    if (!client) {
-      return TE.left(createJsonRpcError(-32000, 'Client not initialized'));
-    }
-
-    const session = storage.getSession(sessionId);
-    if (!session) {
-      return TE.left(createJsonRpcError(-32001, `Session not found: ${sessionId}`));
-    }
-
-    if (!capabilities.loadSession) {
-      logger.info('loadSession capability not available, switching without history');
-      storage.setActiveSession(sessionId);
-      return TE.right(undefined);
-    }
-
-    const rpcClient = client;
-    let messageCount = 0;
-    let isLoadingSession = true;
-
     rpcClient.onNotification((notification: JsonRpcNotification) => {
-      if (!isLoadingSession) return;
+      if (!replayState?.isLoading) return;
       if (notification.method !== 'session/update') return;
 
       const params = notification.params as SessionNotification | undefined;
       if (!params?.update) return;
+      if (params.sessionId !== replayState.sessionId) return;
 
       const { sessionUpdate } = params.update;
-      if (params.sessionId !== sessionId) return;
 
       if (sessionUpdate === 'current_mode_update') {
         updateCurrentMode((params.update as CurrentModeUpdate).currentModeId);
@@ -298,25 +253,23 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
 
       if (!role) return;
 
-      // Handle different content types
+      let message: ChatMessage | null = null;
+
       if (content.type === 'text') {
-        const msg: ChatMessage = {
+        message = {
           id: generateId(),
           role,
           content: content.text,
           timestamp: undefined,
           status: MessageStatus.COMPLETE,
         };
-        historyMessageCallbacks.forEach(cb => cb(msg));
-        messageCount++;
       } else if (content.type === 'resource_link') {
-        // Resource link - reference without content
         const fileName = content.name || content.uri.split('/').pop() || 'file';
         const filePath = content.uri.replace(/^file:\/\//, '');
-        const msg: ChatMessage = {
+        message = {
           id: generateId(),
           role,
-          content: '', // No text content
+          content: '',
           timestamp: undefined,
           status: MessageStatus.COMPLETE,
           context: [
@@ -326,18 +279,15 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
             },
           ],
         };
-        historyMessageCallbacks.forEach(cb => cb(msg));
-        messageCount++;
       } else if (content.type === 'resource') {
-        // Embedded resource - has actual content
         const uri = content.resource.uri;
         const filePath = uri.replace(/^file:\/\//, '').split('#')[0];
         const fileName = filePath.split('/').pop() || 'file';
         const fileContent = 'text' in content.resource ? (content.resource.text ?? '') : '';
-        const msg: ChatMessage = {
+        message = {
           id: generateId(),
           role,
-          content: '', // No text content, it's in context
+          content: '',
           timestamp: undefined,
           status: MessageStatus.COMPLETE,
           context: [
@@ -348,26 +298,133 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
             },
           ],
         };
-        historyMessageCallbacks.forEach(cb => cb(msg));
-        messageCount++;
+      }
+
+      if (message) {
+        historyMessageCallbacks.forEach(cb => cb(message));
+        replayState.messageCount++;
       }
     });
+    logger.info('SessionManager initialized');
+  };
+
+  const toSessionEntry = (session: SessionInfo): SessionEntry => ({
+    sessionId: session.sessionId,
+    title: session.title?.trim() || 'New Session',
+    cwd: session.cwd,
+    updatedAt: session.updatedAt ?? new Date().toISOString(),
+  });
+
+  const setSessions = (nextSessions: readonly SessionEntry[]): void => {
+    sessions = [...nextSessions].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  };
+
+  const listSessions = (): TE.TaskEither<GooseError, readonly SessionEntry[]> => {
+    if (!client) {
+      return TE.left(createJsonRpcError(-32000, 'Client not initialized'));
+    }
+
+    if (!capabilities.listSessions) {
+      return TE.right(sessions);
+    }
+
+    return pipe(
+      client.request<ListSessionsResponse>(AGENT_METHODS.session_list, {}),
+      TE.map(response => {
+        const listedSessions = response.sessions.map(toSessionEntry);
+        const activeSessionId = storage.getActiveSessionId();
+        const fallbackActive =
+          activeSessionId && !listedSessions.some(session => session.sessionId === activeSessionId)
+            ? sessions.find(session => session.sessionId === activeSessionId)
+            : undefined;
+
+        setSessions(fallbackActive ? [fallbackActive, ...listedSessions] : listedSessions);
+        return sessions;
+      })
+    );
+  };
+
+  const createSession = (): TE.TaskEither<GooseError, SessionEntry> => {
+    if (!client) {
+      return TE.left(createJsonRpcError(-32000, 'Client not initialized'));
+    }
+
+    const rpcClient = client;
+
+    return pipe(
+      rpcClient.request<NewSessionResponse>(AGENT_METHODS.session_new, {
+        cwd: workingDirectory,
+        mcpServers: [],
+      }),
+      TE.map(response => {
+        const session: SessionEntry = {
+          sessionId: response.sessionId,
+          title: 'New Session',
+          cwd: workingDirectory,
+          updatedAt: new Date().toISOString(),
+        };
+
+        storage.setActiveSession(session.sessionId);
+        setSessions([
+          session,
+          ...sessions.filter(existing => existing.sessionId !== session.sessionId),
+        ]);
+        setSessionSettings(response.modes, response.models, response.configOptions);
+
+        logger.info(`Created session: ${session.sessionId}`);
+        return session;
+      })
+    );
+  };
+
+  const loadSession = (sessionId: string): TE.TaskEither<GooseError, void> => {
+    if (!client) {
+      return TE.left(createJsonRpcError(-32000, 'Client not initialized'));
+    }
+
+    const session = sessions.find(existing => existing.sessionId === sessionId);
+    if (!session) {
+      if (!capabilities.listSessions) {
+        return TE.left(createJsonRpcError(-32001, `Session not found: ${sessionId}`));
+      }
+      logger.warn(
+        `Session ${sessionId} not found in cached list, attempting load with current working directory`
+      );
+    }
+
+    if (!capabilities.loadSession) {
+      logger.info('loadSession capability not available, switching without history');
+      storage.setActiveSession(sessionId);
+      return TE.right(undefined);
+    }
+
+    const rpcClient = client;
+    replayState = {
+      sessionId,
+      messageCount: 0,
+      isLoading: true,
+    };
 
     return pipe(
       rpcClient.request<LoadSessionResponse>(AGENT_METHODS.session_load, {
         sessionId,
-        cwd: session.cwd,
+        cwd: session?.cwd ?? workingDirectory,
         mcpServers: [],
       }),
       TE.map(response => {
-        isLoadingSession = false;
+        const completedReplay = replayState;
+        replayState = null;
         storage.setActiveSession(sessionId);
         setSessionSettings(response.modes, response.models, response.configOptions);
-        historyCompleteCallbacks.forEach(cb => cb(sessionId, messageCount));
-        logger.info(`Loaded session: ${sessionId} with ${messageCount} messages`);
+        historyCompleteCallbacks.forEach(cb => cb(sessionId, completedReplay?.messageCount ?? 0));
+        logger.info(
+          `Loaded session: ${sessionId} with ${completedReplay?.messageCount ?? 0} messages`
+        );
       }),
       TE.mapLeft(error => {
-        isLoadingSession = false;
+        replayState = null;
         logger.error('Failed to load session:', error);
         return error;
       })
@@ -375,18 +432,17 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   };
 
   const getGroupedSessions = (): GroupedSessions[] => {
-    const sessions = storage.getSessions();
     return groupSessionsByDate(sessions);
   };
 
   const getSessions = (): readonly SessionEntry[] => {
-    return storage.getSessions();
+    return sessions;
   };
 
   const getActiveSession = (): SessionEntry | null => {
     const activeId = storage.getActiveSessionId();
     if (!activeId) return null;
-    return storage.getSession(activeId) ?? null;
+    return sessions.find(session => session.sessionId === activeId) ?? null;
   };
 
   const getActiveSessionId = (): string | null => {
@@ -395,12 +451,6 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
 
   const getSessionSettings = (): SessionSettingsState => {
     return sessionSettings;
-  };
-
-  const updateSessionTitle = async (sessionId: string, title: string): Promise<void> => {
-    const generatedTitle = generateSessionTitle(title);
-    await storage.updateSessionTitle(sessionId, generatedTitle);
-    logger.debug(`Updated session title: ${sessionId} -> ${generatedTitle}`);
   };
 
   const setSessionMode = (modeId: string): TE.TaskEither<GooseError, void> => {
@@ -469,6 +519,10 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     return capabilities.loadSession;
   };
 
+  const hasListSessionsCapability = (): boolean => {
+    return capabilities.listSessions;
+  };
+
   const hasEmbeddedContextCapability = (): boolean => {
     return capabilities.promptCapabilities.embeddedContext;
   };
@@ -516,16 +570,17 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   return {
     initialize,
     createSession,
+    listSessions,
     loadSession,
     getGroupedSessions,
     getSessions,
     getActiveSession,
     getActiveSessionId,
     getSessionSettings,
-    updateSessionTitle,
     setSessionMode,
     setSessionModel,
     hasLoadSessionCapability,
+    hasListSessionsCapability,
     hasEmbeddedContextCapability,
     onHistoryMessage,
     onHistoryComplete,

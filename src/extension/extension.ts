@@ -359,6 +359,7 @@ async function initializeAcpSession(
     if (agentCaps) {
       capabilities = {
         loadSession: agentCaps.loadSession ?? DEFAULT_CAPABILITIES.loadSession,
+        listSessions: agentCaps.sessionCapabilities?.list !== undefined,
         promptCapabilities: {
           image: agentCaps.promptCapabilities?.image ?? false,
           audio: agentCaps.promptCapabilities?.audio ?? false,
@@ -366,7 +367,7 @@ async function initializeAcpSession(
         },
       };
       log.info(
-        `Agent capabilities: loadSession=${capabilities.loadSession}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`
+        `Agent capabilities: loadSession=${capabilities.loadSession}, listSessions=${capabilities.listSessions}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`
       );
     }
   } else {
@@ -375,18 +376,36 @@ async function initializeAcpSession(
 
   manager.initialize(client, capabilities, workingDirectory);
 
+  if (manager.hasListSessionsCapability()) {
+    const sessionsResult = await manager.listSessions()();
+    if (E.isLeft(sessionsResult)) {
+      log.warn('Failed to fetch session list during initialization:', sessionsResult.left);
+    }
+  }
+
+  const existingSessionId = manager.getActiveSessionId();
   const existingSession = manager.getActiveSession();
-  if (existingSession) {
-    log.info(`Found existing session: ${existingSession.sessionId}, attempting to restore...`);
+  if (existingSessionId) {
+    log.info(`Found existing session: ${existingSessionId}, attempting to restore...`);
 
     // Try to restore the session with the server
     if (manager.hasLoadSessionCapability()) {
-      const loadResult = await manager.loadSession(existingSession.sessionId)();
+      const loadResult = await manager.loadSession(existingSessionId)();
       if (E.isRight(loadResult)) {
-        log.info(`Successfully restored session: ${existingSession.sessionId}`);
-        return existingSession;
+        log.info(`Successfully restored session: ${existingSessionId}`);
+        return (
+          existingSession ?? {
+            sessionId: existingSessionId,
+            title: 'New Session',
+            cwd: workingDirectory,
+            updatedAt: new Date().toISOString(),
+          }
+        );
       }
-      log.warn(`Failed to restore session ${existingSession.sessionId}, creating new session`);
+      if (manager.hasListSessionsCapability()) {
+        await sessionStorage?.clearActiveSession();
+      }
+      log.warn(`Failed to restore session ${existingSessionId}, creating new session`);
     } else {
       // Server doesn't support session/load - create a fresh session
       log.info('Server does not support session/load, creating new session');
@@ -411,6 +430,16 @@ function setupAcpCommunication(
   log: Logger
 ): void {
   let currentResponseId: string | null = null;
+
+  const postSessionList = async (activeSessionId: string | null): Promise<void> => {
+    const result = await manager.listSessions()();
+    if (E.isRight(result)) {
+      provider.postMessage(createSessionsListMessage(result.right, activeSessionId));
+    } else {
+      log.error('Failed to fetch session list:', result.left);
+      provider.postMessage(createSessionsListMessage(manager.getSessions(), activeSessionId));
+    }
+  };
 
   const getActiveSessionId = (): string | null => {
     return manager.getActiveSessionId();
@@ -520,11 +549,6 @@ function setupAcpCommunication(
         log.info(`With ${contextChips.length} context chip(s)`);
       }
 
-      const activeSession = manager.getActiveSession();
-      if (activeSession && activeSession.title === 'New Session') {
-        manager.updateSessionTitle(activeSession.sessionId, content);
-      }
-
       const sendRequest = async (): Promise<void> => {
         // Build prompt content blocks with resource links for context
         const promptBlocks = await buildPromptBlocks(content, contextChips, log);
@@ -589,16 +613,15 @@ function setupAcpCommunication(
       log.info('Creating new session...');
       manager
         .createSession()()
-        .then(result => {
+        .then(async result => {
           if (E.isRight(result)) {
             provider.postMessage(createSessionCreatedMessage(result.right));
-            provider.postMessage(
-              createSessionsListMessage(manager.getSessions(), result.right.sessionId)
-            );
+            await postSessionList(result.right.sessionId);
             provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
             log.info(`New session created: ${result.right.sessionId}`);
           } else {
             log.error('Failed to create session:', result.left);
+            await postSessionList(manager.getActiveSessionId());
             provider.postMessage(
               createErrorMessage('Session Creation Failed', result.left.message)
             );
@@ -608,9 +631,7 @@ function setupAcpCommunication(
 
     if (isGetSessionsMessage(message)) {
       log.debug('Sending session list');
-      provider.postMessage(
-        createSessionsListMessage(manager.getSessions(), manager.getActiveSessionId())
-      );
+      void postSessionList(manager.getActiveSessionId());
       provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
     }
 
@@ -623,16 +644,17 @@ function setupAcpCommunication(
 
       manager
         .loadSession(sessionId)()
-        .then(result => {
+        .then(async result => {
           if (E.isRight(result)) {
             provider.postMessage(
               createSessionLoadedMessage(sessionId, !manager.hasLoadSessionCapability())
             );
-            provider.postMessage(createSessionsListMessage(manager.getSessions(), sessionId));
+            await postSessionList(sessionId);
             provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
             log.info(`Session loaded: ${sessionId}`);
           } else {
             log.error('Failed to load session:', result.left);
+            await postSessionList(manager.getActiveSessionId());
             provider.postMessage(createErrorMessage('Session Load Failed', result.left.message));
           }
         });
@@ -840,6 +862,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const clientResult = subprocessManager.getClient();
     if (E.isRight(clientResult)) {
       const client = clientResult.right;
+      setupAcpCommunication(webviewProvider, client, sessionManager, logger.child('ACP'));
       const session = await initializeAcpSession(
         client,
         getWorkspaceFolder(),
@@ -848,7 +871,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
 
       if (session) {
-        setupAcpCommunication(webviewProvider, client, sessionManager, logger.child('ACP'));
+        webviewProvider.postMessage(
+          createSessionsListMessage(
+            sessionManager.getSessions(),
+            sessionManager.getActiveSessionId()
+          )
+        );
+        webviewProvider.postMessage(
+          createSessionSettingsMessage(sessionManager.getSessionSettings())
+        );
         logger.info('ACP communication enabled');
       } else {
         setupMockStreaming(webviewProvider, logger.child('Mock'));
