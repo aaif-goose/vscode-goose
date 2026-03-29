@@ -64,7 +64,7 @@ export function AssistantMessage({
           {showIndicator ? (
             <ProgressIndicator className="py-2" />
           ) : hasStructuredParts ? (
-            <div className="flex flex-col gap-3 rounded-xl px-3 pt-2 pb-6">
+            <div className="flex flex-col gap-2 rounded-xl px-3 pt-2 pb-6">
               {contentParts.map((part, index) => {
                 if (part.type === 'text') {
                   return (

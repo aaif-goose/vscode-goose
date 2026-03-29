@@ -80,27 +80,29 @@ export function ToolCallCard({ part }: ToolCallCardProps) {
   const previewText = part.contentPreview?.join('\n') ?? '';
   const inlineInputPreview = getInlineInputPreview(part);
   const hasDetails = Boolean(inputText || outputText || previewText);
-  const shouldOpenByDefault = part.status === 'in_progress';
+  const isRunning = part.status === 'in_progress';
 
   return (
-    <details
-      className="rounded-lg border border-[color:color-mix(in_srgb,var(--vscode-widget-border)_70%,transparent)] bg-[color:color-mix(in_srgb,var(--vscode-editorWidget-background)_45%,transparent)]"
-      open={shouldOpenByDefault}
-    >
+    <details className="rounded-lg border border-[color:color-mix(in_srgb,var(--vscode-widget-border)_70%,transparent)] bg-[color:color-mix(in_srgb,var(--vscode-editorWidget-background)_45%,transparent)]">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2">
         <div className="min-w-0 flex flex-1 items-center gap-2">
-          <span
-            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-              part.status === 'completed'
-                ? 'bg-[var(--vscode-testing-iconPassed)]'
-                : part.status === 'failed'
-                  ? 'bg-[var(--vscode-errorForeground)]'
-                  : part.status === 'in_progress'
-                    ? 'bg-[var(--vscode-charts-yellow)]'
+          {isRunning ? (
+            <span
+              className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border border-[var(--vscode-charts-yellow)] border-t-transparent"
+              aria-hidden="true"
+            />
+          ) : (
+            <span
+              className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                part.status === 'completed'
+                  ? 'bg-[var(--vscode-testing-iconPassed)]'
+                  : part.status === 'failed'
+                    ? 'bg-[var(--vscode-errorForeground)]'
                     : 'bg-[var(--vscode-descriptionForeground)]'
-            }`}
-            aria-hidden="true"
-          />
+              }`}
+              aria-hidden="true"
+            />
+          )}
           <p className="min-w-0 truncate leading-5">
             <span className="text-[13px] font-medium text-[var(--vscode-foreground)]">
               {part.title}

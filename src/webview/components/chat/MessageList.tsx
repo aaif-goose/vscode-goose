@@ -20,9 +20,11 @@ const MessageListComponent = forwardRef<MessageListHandle, MessageListProps>(fun
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const { scrollToBottom } = useAutoScroll(containerRef, {
     isStreaming: isGenerating,
+    contentRef,
   });
   const prevMessageCountRef = useRef(0);
   const hasInitialScrolled = useRef(false);
@@ -71,7 +73,7 @@ const MessageListComponent = forwardRef<MessageListHandle, MessageListProps>(fun
       aria-live="polite"
       aria-label="Chat messages"
     >
-      <div className="flex flex-col gap-5">
+      <div ref={contentRef} className="flex flex-col gap-5">
         {messages.map((message, index) => (
           <div
             key={message.id}

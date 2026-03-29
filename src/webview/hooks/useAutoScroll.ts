@@ -3,6 +3,7 @@ import { RefObject, useCallback, useEffect, useRef, useState } from 'react';
 interface UseAutoScrollOptions {
   isStreaming: boolean;
   threshold?: number;
+  contentRef?: RefObject<HTMLElement | null>;
 }
 
 interface UseAutoScrollReturn {
@@ -16,7 +17,7 @@ export function useAutoScroll(
   containerRef: RefObject<HTMLElement | null>,
   options: UseAutoScrollOptions
 ): UseAutoScrollReturn {
-  const { isStreaming, threshold = DEFAULT_THRESHOLD } = options;
+  const { isStreaming, threshold = DEFAULT_THRESHOLD, contentRef } = options;
   const [isAtBottom, setIsAtBottom] = useState(true);
   const userScrolledUp = useRef(false);
 
@@ -67,6 +68,23 @@ export function useAutoScroll(
       container.scrollTop = container.scrollHeight;
     }
   }, [containerRef, isStreaming]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const content = contentRef?.current;
+    if (!container || !content || typeof ResizeObserver === 'undefined') return;
+
+    const scrollIfNeeded = () => {
+      if (isStreaming && !userScrolledUp.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+    };
+
+    const observer = new ResizeObserver(scrollIfNeeded);
+    observer.observe(content);
+
+    return () => observer.disconnect();
+  }, [containerRef, contentRef, isStreaming]);
 
   useEffect(() => {
     if (!isStreaming) {

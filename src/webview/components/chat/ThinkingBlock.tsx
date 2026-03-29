@@ -8,21 +8,29 @@ interface ThinkingBlockProps {
 export function ThinkingBlock({ part }: ThinkingBlockProps) {
   if (!part.text.trim()) {
     return (
-      <div className="rounded-lg border border-[var(--vscode-widget-border)] bg-[var(--vscode-sideBar-background)]/40 px-3 py-2 text-sm italic text-[var(--vscode-descriptionForeground)]">
-        Thinking...
+      <div className="py-0.5 text-[13px] italic text-[var(--vscode-descriptionForeground)] opacity-70">
+        Thinking:
+      </div>
+    );
+  }
+
+  if (part.streaming) {
+    return (
+      <div className="py-0.5 text-[13px] italic text-[var(--vscode-descriptionForeground)] opacity-70">
+        <p className="mb-0.5">Thinking:</p>
+        <div className="pl-4">
+          <MarkdownRenderer content={part.text} isStreaming={part.streaming} />
+        </div>
       </div>
     );
   }
 
   return (
-    <details
-      className="rounded-lg border border-[var(--vscode-widget-border)] bg-[var(--vscode-sideBar-background)]/40"
-      open={part.streaming}
-    >
-      <summary className="cursor-pointer list-none px-3 py-2 text-sm text-[var(--vscode-descriptionForeground)]">
-        {part.streaming ? 'Thinking...' : 'Thought process'}
+    <details className="py-0.5">
+      <summary className="cursor-pointer list-none text-[13px] italic text-[var(--vscode-descriptionForeground)] opacity-70">
+        Show reasoning
       </summary>
-      <div className="px-3 pb-3 pt-0 text-sm text-[var(--vscode-descriptionForeground)]">
+      <div className="pt-1 pl-4 text-[13px] italic text-[var(--vscode-descriptionForeground)] opacity-70">
         <MarkdownRenderer content={part.text} isStreaming={part.streaming} />
       </div>
     </details>

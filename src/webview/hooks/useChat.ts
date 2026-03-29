@@ -93,6 +93,13 @@ function appendTextPart(
     return nextParts;
   }
 
+  if (lastPart?.type === 'thinking') {
+    nextParts[nextParts.length - 1] = {
+      ...lastPart,
+      streaming: false,
+    };
+  }
+
   nextParts.push({
     type: 'text',
     text: token,
@@ -117,6 +124,13 @@ function appendThinkingPart(
     return nextParts;
   }
 
+  if (lastPart?.type === 'text') {
+    nextParts[nextParts.length - 1] = {
+      ...lastPart,
+      streaming: false,
+    };
+  }
+
   nextParts.push({
     type: 'thinking',
     text,
@@ -139,6 +153,7 @@ function upsertToolCallPart(
   }
 ): ChatContentPart[] {
   const nextParts = [...(parts ?? [])];
+  const lastPart = nextParts[nextParts.length - 1];
   const existingIndex = nextParts.findIndex(
     part => part.type === 'tool_call' && part.id === toolCall.id
   );
@@ -156,6 +171,13 @@ function upsertToolCallPart(
       locations: toolCall.locations ?? existing.locations,
     };
     return nextParts;
+  }
+
+  if (lastPart?.type === 'text' || lastPart?.type === 'thinking') {
+    nextParts[nextParts.length - 1] = {
+      ...lastPart,
+      streaming: false,
+    };
   }
 
   nextParts.push({
