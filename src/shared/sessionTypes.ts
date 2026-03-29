@@ -22,6 +22,7 @@ export interface SessionStorageData {
 export interface AgentCapabilities {
   readonly loadSession: boolean;
   readonly listSessions: boolean;
+  readonly additionalDirectories: boolean;
   readonly promptCapabilities: {
     readonly image: boolean;
     readonly audio: boolean;
@@ -68,6 +69,7 @@ export interface GroupedSessions {
 export const DEFAULT_CAPABILITIES: AgentCapabilities = {
   loadSession: true,
   listSessions: false,
+  additionalDirectories: false,
   promptCapabilities: {
     image: false,
     audio: false,
