@@ -372,27 +372,6 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
 /** ACP prompt content block types */
 type AcpContentBlock = Extract<ContentBlock, { type: 'text' | 'resource_link' }>;
 
-interface EditorPromptContext {
-  readonly filePath: string;
-  readonly cursorLine?: number;
-  readonly cursorColumn?: number;
-  readonly selectionStartLine?: number;
-  readonly selectionStartColumn?: number;
-  readonly selectionEndLine?: number;
-  readonly selectionEndColumn?: number;
-  readonly selectedText?: string;
-}
-
-interface WorkspacePromptContext {
-  readonly workspaceFile: string | null;
-  readonly workspaceFolders: readonly string[];
-}
-
-interface SessionWorkspaceContext {
-  readonly cwd: string;
-  readonly additionalDirectories: readonly string[];
-}
-
 /** Get MIME type from file path */
 function getMimeType(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
@@ -421,71 +400,6 @@ function getMimeType(filePath: string): string {
   return mimeTypes[ext] ?? 'text/plain';
 }
 
-function getActiveEditorContext(): EditorPromptContext | null {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) return null;
-
-  const document = editor.document;
-  if (document.uri.scheme !== 'file') return null;
-
-  const selection = editor.selection;
-  const context: EditorPromptContext = {
-    filePath: document.uri.fsPath,
-  };
-
-  if (!selection.isEmpty) {
-    context.selectionStartLine = selection.start.line + 1;
-    context.selectionStartColumn = selection.start.character + 1;
-    context.selectionEndLine = selection.end.line + 1;
-    context.selectionEndColumn = selection.end.character + 1;
-    context.selectedText = document.getText(selection);
-  } else {
-    context.cursorLine = selection.active.line + 1;
-    context.cursorColumn = selection.active.character + 1;
-  }
-
-  return context;
-}
-
-function getWorkspacePromptContext(): WorkspacePromptContext {
-  const workspaceFolders =
-    vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath) ?? [];
-
-  return {
-    workspaceFile: vscode.workspace.workspaceFile?.fsPath ?? null,
-    workspaceFolders,
-  };
-}
-
-function getActiveWorkspaceFolderPath(): string | null {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) return null;
-
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
-  return workspaceFolder?.uri.fsPath ?? null;
-}
-
-function getSessionWorkspaceContext(): SessionWorkspaceContext {
-  const workspaceFolders =
-    vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath) ?? [];
-
-  if (workspaceFolders.length > 0) {
-    const activeWorkspaceFolder = getActiveWorkspaceFolderPath();
-    const cwd = activeWorkspaceFolder ?? workspaceFolders[0];
-    const additionalDirectories = workspaceFolders.filter(folder => folder !== cwd);
-    return { cwd, additionalDirectories };
-  }
-
-  return {
-    cwd: process.cwd(),
-    additionalDirectories: [],
-  };
-}
-
-function generateSelectionDelimiter(): string {
-  return `EDITOR_SELECTION_${Math.random().toString(36).slice(2, 10)}`;
-}
-
 /** Read specific lines from a file */
 async function readFileLines(
   filePath: string,
@@ -504,58 +418,9 @@ async function readFileLines(
 async function buildPromptBlocks(
   content: string,
   chips: readonly ContextChipData[] | undefined,
-  editorContext: EditorPromptContext | null,
-  workspaceContext: WorkspacePromptContext,
   log: Logger
 ): Promise<AcpContentBlock[]> {
   const blocks: AcpContentBlock[] = [];
-
-  const workspaceContextLines = [
-    'Workspace context:',
-    `- Workspace file: ${workspaceContext.workspaceFile ?? 'n/a'}`,
-    '- Workspace folders:',
-    ...workspaceContext.workspaceFolders.map(folder => `  - ${folder}`),
-  ];
-
-  if (workspaceContext.workspaceFolders.length === 0) {
-    workspaceContextLines.push('  - n/a');
-  }
-
-  blocks.push({
-    type: 'text',
-    text: workspaceContextLines.join('\n'),
-  });
-
-  if (editorContext) {
-    const editorContextLines = ['Editor context:', `- Active file: ${editorContext.filePath}`];
-
-    if (
-      editorContext.selectionStartLine !== undefined &&
-      editorContext.selectionStartColumn !== undefined &&
-      editorContext.selectionEndLine !== undefined &&
-      editorContext.selectionEndColumn !== undefined
-    ) {
-      const selectionDelimiter = generateSelectionDelimiter();
-      editorContextLines.push(
-        `- Selection: line ${editorContext.selectionStartLine}, column ${editorContext.selectionStartColumn} to line ${editorContext.selectionEndLine}, column ${editorContext.selectionEndColumn}`
-      );
-      if (editorContext.selectedText !== undefined) {
-        editorContextLines.push(`- Selected text (${selectionDelimiter}):`);
-        editorContextLines.push(`BEGIN_${selectionDelimiter}`);
-        editorContextLines.push(editorContext.selectedText);
-        editorContextLines.push(`END_${selectionDelimiter}`);
-      }
-    } else if (editorContext.cursorLine !== undefined && editorContext.cursorColumn !== undefined) {
-      editorContextLines.push(
-        `- Cursor: line ${editorContext.cursorLine}, column ${editorContext.cursorColumn}`
-      );
-    }
-
-    blocks.push({
-      type: 'text',
-      text: editorContextLines.join('\n'),
-    });
-  }
 
   if (chips && chips.length > 0) {
     for (const chip of chips) {
@@ -721,9 +586,6 @@ async function initializeAcpSession(
       capabilities = {
         loadSession: agentCaps.loadSession ?? DEFAULT_CAPABILITIES.loadSession,
         listSessions: agentCaps.sessionCapabilities?.list !== undefined,
-        additionalDirectories:
-          (agentCaps.sessionCapabilities as { additionalDirectories?: unknown } | undefined)
-            ?.additionalDirectories !== undefined,
         promptCapabilities: {
           image: agentCaps.promptCapabilities?.image ?? false,
           audio: agentCaps.promptCapabilities?.audio ?? false,
@@ -731,20 +593,14 @@ async function initializeAcpSession(
         },
       };
       log.info(
-        `Agent capabilities: loadSession=${capabilities.loadSession}, listSessions=${capabilities.listSessions}, additionalDirectories=${capabilities.additionalDirectories}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`
+        `Agent capabilities: loadSession=${capabilities.loadSession}, listSessions=${capabilities.listSessions}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`
       );
     }
   } else {
     log.warn('ACP initialize failed, using default capabilities:', initResult.left);
   }
 
-  const workspaceContext = getSessionWorkspaceContext();
-  manager.initialize(
-    client,
-    capabilities,
-    workingDirectory,
-    workspaceContext.additionalDirectories
-  );
+  manager.initialize(client, capabilities, workingDirectory);
 
   if (manager.hasListSessionsCapability()) {
     const sessionsResult = await manager.listSessions()();
@@ -920,17 +776,8 @@ function setupAcpCommunication(
       }
 
       const sendRequest = async (): Promise<void> => {
-        const editorContext = getActiveEditorContext();
-        const workspaceContext = getWorkspacePromptContext();
-
         // Build prompt content blocks with resource links for context
-        const promptBlocks = await buildPromptBlocks(
-          content,
-          contextChips,
-          editorContext,
-          workspaceContext,
-          log
-        );
+        const promptBlocks = await buildPromptBlocks(content, contextChips, log);
 
         const result = await client.request<PromptResponse>(
           AGENT_METHODS.session_prompt,
@@ -1068,7 +915,11 @@ function setupAcpCommunication(
 }
 
 function getWorkspaceFolder(): string {
-  return getSessionWorkspaceContext().cwd;
+  const folders = vscode.workspace.workspaceFolders;
+  if (folders && folders.length > 0) {
+    return folders[0].uri.fsPath;
+  }
+  return process.cwd();
 }
 
 function setupExternalLinkHandler(provider: WebviewProvider, log: Logger): void {

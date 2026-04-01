@@ -45,8 +45,7 @@ export interface SessionManager {
   initialize(
     client: JsonRpcClient,
     capabilities: AgentCapabilities,
-    workingDirectory: string,
-    additionalDirectories: readonly string[]
+    workingDirectory: string
   ): void;
   createSession(): TE.TaskEither<GooseError, SessionEntry>;
   listSessions(): TE.TaskEither<GooseError, readonly SessionEntry[]>;
@@ -60,7 +59,6 @@ export interface SessionManager {
   setSessionModel(modelId: string): TE.TaskEither<GooseError, void>;
   hasLoadSessionCapability(): boolean;
   hasListSessionsCapability(): boolean;
-  hasAdditionalDirectoriesCapability(): boolean;
   hasEmbeddedContextCapability(): boolean;
   onHistoryMessage(callback: (message: ChatMessage) => void): () => void;
   onHistoryComplete(callback: (sessionId: string, messageCount: number) => void): () => void;
@@ -72,7 +70,6 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   let client: JsonRpcClient | null = null;
   let capabilities: AgentCapabilities = DEFAULT_CAPABILITIES;
   let workingDirectory = '';
-  let additionalDirectories: readonly string[] = [];
   let sessions: SessionEntry[] = [];
   let sessionSettings: SessionSettingsState = EMPTY_SESSION_SETTINGS;
   let replayState: {
@@ -212,13 +209,11 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
   const initialize = (
     rpcClient: JsonRpcClient,
     agentCapabilities: AgentCapabilities,
-    cwd: string,
-    workspaceAdditionalDirectories: readonly string[]
+    cwd: string
   ): void => {
     client = rpcClient;
     capabilities = agentCapabilities;
     workingDirectory = cwd;
-    additionalDirectories = [...workspaceAdditionalDirectories];
     rpcClient.onNotification((notification: JsonRpcNotification) => {
       if (!replayState?.isLoading) return;
       if (notification.method !== 'session/update') return;
@@ -362,10 +357,7 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
       rpcClient.request<NewSessionResponse>(AGENT_METHODS.session_new, {
         cwd: workingDirectory,
         mcpServers: [],
-        ...(capabilities.additionalDirectories
-          ? { additionalDirectories: additionalDirectories }
-          : {}),
-      } as Parameters<typeof rpcClient.request<NewSessionResponse>>[1]),
+      }),
       TE.map(response => {
         const session: SessionEntry = {
           sessionId: response.sessionId,
@@ -531,10 +523,6 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     return capabilities.listSessions;
   };
 
-  const hasAdditionalDirectoriesCapability = (): boolean => {
-    return capabilities.additionalDirectories;
-  };
-
   const hasEmbeddedContextCapability = (): boolean => {
     return capabilities.promptCapabilities.embeddedContext;
   };
@@ -593,7 +581,6 @@ export function createSessionManager(storage: SessionStorage, logger: Logger): S
     setSessionModel,
     hasLoadSessionCapability,
     hasListSessionsCapability,
-    hasAdditionalDirectoriesCapability,
     hasEmbeddedContextCapability,
     onHistoryMessage,
     onHistoryComplete,
