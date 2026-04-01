@@ -22,7 +22,7 @@ export function CopyButton({ text, className = '', variant = 'default' }: CopyBu
   }, [text]);
 
   const baseClasses =
-    'flex items-center gap-1 px-2 py-1 rounded text-xs transition-all duration-150';
+    'flex items-center gap-1 rounded-md px-2 py-1 text-xs shadow-sm backdrop-blur-sm transition-all duration-150';
   const hoverClasses =
     status === 'idle'
       ? isBubble
@@ -40,11 +40,14 @@ export function CopyButton({ text, className = '', variant = 'default' }: CopyBu
       : status === 'error'
         ? 'text-[var(--vscode-errorForeground)]'
         : 'text-[var(--vscode-foreground)]';
+  const backgroundClasses = isBubble
+    ? 'bg-[rgba(30,30,30,0.92)]'
+    : 'bg-[color:color-mix(in_srgb,var(--vscode-editor-background)_92%,var(--vscode-panel-border)_8%)] border border-[var(--vscode-panel-border)]';
 
   return (
     <button
       onClick={handleCopy}
-      className={`${baseClasses} ${hoverClasses} ${colorClasses} ${className}`}
+      className={`${baseClasses} ${hoverClasses} ${colorClasses} ${backgroundClasses} ${className}`}
       aria-label={
         status === 'copied' ? 'Copied!' : status === 'error' ? 'Copy failed' : 'Copy code'
       }

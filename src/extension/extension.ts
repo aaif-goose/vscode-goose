@@ -3,6 +3,14 @@
  * Manages activation, subprocess lifecycle, and webview registration.
  */
 
+import {
+  AGENT_METHODS,
+  type ContentBlock,
+  type InitializeResponse,
+  PROTOCOL_VERSION,
+  type PromptResponse,
+  type SessionNotification,
+} from '@agentclientprotocol/sdk';
 import * as E from 'fp-ts/Either';
 import * as fs from 'fs/promises';
 import * as vscode from 'vscode';
@@ -18,26 +26,39 @@ import {
   createErrorMessage,
   createGenerationCancelledMessage,
   createGenerationCompleteMessage,
+  createGenerationErrorMessage,
   createHistoryCompleteMessage,
   createHistoryMessage,
   createSearchResultsMessage,
   createSessionCreatedMessage,
   createSessionLoadedMessage,
+  createSessionSettingsMessage,
   createSessionsListMessage,
   createStreamTokenMessage,
+  createThinkingDeltaMessage,
+  createToolCallStartMessage,
+  createToolCallUpdateMessage,
   isCreateSessionMessage,
   isFileSearchMessage,
   isGetSessionsMessage,
   isOpenExternalLinkMessage,
   isSelectSessionMessage,
   isSendMessageMessage,
+  isSetSessionModelMessage,
+  isSetSessionModeMessage,
   isStopGenerationMessage,
 } from '../shared/messages';
 import { DEFAULT_CAPABILITIES, SessionEntry } from '../shared/sessionTypes';
 import { JsonRpcNotification, ProcessStatus } from '../shared/types';
 import { discoverBinary } from './binaryDiscovery';
 import { registerCommands, registerContextCommands } from './commands';
-import { affectsSetting, getBinaryDiscoveryConfig, getLogLevel, onConfigChange } from './config';
+import {
+  affectsSetting,
+  getBinaryDiscoveryConfig,
+  getLogLevel,
+  isMockBinaryPath,
+  onConfigChange,
+} from './config';
 import { createFileSearchService, FileSearchService } from './fileSearchService';
 import { JsonRpcClient } from './jsonRpcClient';
 import { createLogger, Logger } from './logger';
@@ -58,11 +79,91 @@ let fileSearchService: FileSearchService | null = null;
 let mockStreamingTimer: ReturnType<typeof setTimeout> | null = null;
 let mockStreamingCancelled = false;
 
-const MOCK_RESPONSES = [
-  "I'd be happy to help you with that! Let me think about this...\n\nHere's what I suggest:\n\n1. **First step**: Start by understanding the problem\n2. **Second step**: Break it down into smaller parts\n3. **Third step**: Implement the solution\n\n```typescript\nfunction example() {\n  console.log('Hello, world!');\n}\n```\n\nLet me know if you need more details!",
-  "Great question! Here's a quick overview:\n\n- This is a **key concept** to understand\n- It works by processing data incrementally\n- The result is then returned to the caller\n\n> Note: This is just a mock response for testing the UI.\n\nWould you like me to elaborate on any part?",
-  "Sure thing! Let me explain...\n\nThe main idea here is to keep things simple and focused. Here's an example:\n\n```python\ndef greet(name):\n    return f'Hello, {name}!'\n```\n\nThis demonstrates the basic pattern. The streaming UI should show this text appearing gradually, token by token.",
+const MOCK_THINKING_RESPONSES = [
+  'Checking the workspace context and figuring out the best way to answer.\n\nI want to keep the response concise while still giving a useful next step.',
+  'Breaking the request into smaller parts.\n\nFirst I will identify what is being asked, then I will shape the final answer around the most relevant details.',
+  'Reviewing the prompt and planning a response.\n\nI am looking for the clearest explanation and a small example if it helps.',
 ];
+
+const MOCK_TOOL_CALLS = [
+  {
+    title: 'Shell',
+    kind: 'shell',
+    rawInput: {
+      command: 'Get-ChildItem src\\webview\\components\\chat',
+      workdir: 'e:\\dev\\writing-dev-tools\\vscode-goose',
+      timeout_ms: 10000,
+    },
+    contentPreview: ['AssistantMessage.tsx', 'ThinkingBlock.tsx', 'ToolCallCard.tsx'],
+    rawOutput: {
+      exitCode: 0,
+      stdoutPreview: ['AssistantMessage.tsx', 'ThinkingBlock.tsx', 'ToolCallCard.tsx'],
+    },
+    finalStatus: 'completed' as const,
+  },
+  {
+    title: 'Search workspace files',
+    kind: 'search',
+    rawInput: { query: 'thinking message UX', limit: 5 },
+    contentPreview: [
+      'src/webview/hooks/useChat.ts',
+      'src/webview/components/chat/ThinkingBlock.tsx',
+      'src/extension/extension.ts',
+    ],
+    rawOutput: {
+      matches: 3,
+      topResult: 'src/webview/hooks/useChat.ts',
+    },
+    finalStatus: 'completed' as const,
+  },
+  {
+    title: 'Read project documentation',
+    kind: 'read',
+    rawInput: { path: 'docs/DEVELOPMENT.md' },
+    contentPreview: [
+      'Attempting to read docs/DEVELOPMENT.md',
+      'The mock is simulating a failure for this tool call',
+      'This gives the UI a failed tool-state example',
+    ],
+    rawOutput: {
+      code: 'ENOENT',
+      message: 'Mock file read failed for docs/DEVELOPMENT.md',
+    },
+    finalStatus: 'failed' as const,
+  },
+];
+
+const MOCK_FAILED_TOOL_CALL = MOCK_TOOL_CALLS[MOCK_TOOL_CALLS.length - 1];
+
+const MOCK_RESPONSE_SCENARIOS = [
+  {
+    successfulToolCall: MOCK_TOOL_CALLS[0],
+    intro:
+      'I’m going to inspect the chat UI pieces first, then I’ll summarize what I found.\n\nI’ll start with a shell-style check of the relevant components.\n\n',
+    middle:
+      'The shell results confirm the main chat components are present.\n\nNext I want to verify the docs path and deliberately surface a failed tool state in the UI.\n\n',
+    outro:
+      "Here’s the summary:\n\n1. **Thinking UI** is wired into the chat renderer.\n2. **Tool calls** can appear inline with assistant output.\n3. **Failure states** still keep the response moving.\n\n```typescript\nfunction example() {\n  console.log('Mock mode now shows tool activity clearly');\n}\n```\n\nLet me know if you want me to simulate a different workflow.\n",
+  },
+  {
+    successfulToolCall: MOCK_TOOL_CALLS[1],
+    intro:
+      'I’ll walk through this in a couple of steps so the flow is easy to follow.\n\nFirst I’m going to search the workspace for the chat-related files.\n\n',
+    middle:
+      'That search gave me the files I expected.\n\nI’m also checking the docs path so we can see how the UI handles a tool that does not succeed.\n\n',
+    outro:
+      'With that context, the important behavior is:\n\n- assistant text can stream before and after tool activity\n- tool cards can stay visible while they are running\n- failures can be shown without interrupting the rest of the answer\n\nWould you like me to add a mock diff or file-edit tool next?\n',
+  },
+  {
+    successfulToolCall: MOCK_TOOL_CALLS[0],
+    intro:
+      'I’m going to gather a little context before answering directly.\n\nFirst up is a shell inspection of the chat components so we can see a longer-running tool in progress.\n\n',
+    middle:
+      'The initial inspection looks good.\n\nI’ll try one more tool call that intentionally fails so we can validate that state in the interface too.\n\n',
+    outro:
+      'After both tool calls, the overall result is still straightforward:\n\nThe mock agent can now show thinking, long-running tools, failed tools, and normal response text in one coherent turn.\n',
+  },
+] as const;
 
 function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
   let currentResponseId: string | null = null;
@@ -77,13 +178,164 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
       mockStreamingCancelled = false;
 
       // Pick a random mock response
-      const responseText = MOCK_RESPONSES[Math.floor(Math.random() * MOCK_RESPONSES.length)];
-      const tokens = responseText.split(/(?<=\s)|(?=\s)/); // Split on whitespace boundaries
+      const thinkingText =
+        MOCK_THINKING_RESPONSES[Math.floor(Math.random() * MOCK_THINKING_RESPONSES.length)];
+      const responseScenario =
+        MOCK_RESPONSE_SCENARIOS[Math.floor(Math.random() * MOCK_RESPONSE_SCENARIOS.length)];
+      const thinkingTokens = thinkingText.split(/(?<=\s)|(?=\s)/);
+      const introTokens = responseScenario.intro.split(/(?<=\s)|(?=\s)/);
+      const middleTokens = responseScenario.middle.split(/(?<=\s)|(?=\s)/);
+      const outroTokens = responseScenario.outro.split(/(?<=\s)|(?=\s)/);
+      const scriptedToolCalls = [
+        {
+          ...responseScenario.successfulToolCall,
+          id: `mock-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          pendingDelay: 250,
+          inProgressDelay: 1200,
+        },
+        {
+          ...MOCK_FAILED_TOOL_CALL,
+          id: `mock-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          pendingDelay: 250,
+          inProgressDelay: 1500,
+        },
+      ] as const;
 
-      let tokenIndex = 0;
+      let thinkingTokenIndex = 0;
+      let phase: 'intro' | 'tool1' | 'middle' | 'tool2' | 'outro' | 'done' = 'intro';
+      let toolCallStage: 'start' | 'update' | 'complete' | 'done' = 'start';
+
+      const scheduleNextStep = (delay: number): void => {
+        mockStreamingTimer = setTimeout(streamNextToken, delay);
+      };
+
+      const runToolCallStep = (
+        toolCall: (typeof scriptedToolCalls)[number],
+        nextPhase: typeof phase
+      ): boolean => {
+        if (!currentResponseId) return false;
+
+        if (toolCallStage === 'start') {
+          provider.postMessage(
+            createToolCallStartMessage(currentResponseId, toolCall.id, toolCall.title, 'pending', {
+              kind: toolCall.kind,
+              rawInput: toolCall.rawInput,
+            })
+          );
+          toolCallStage = 'update';
+          scheduleNextStep(toolCall.pendingDelay);
+          return true;
+        }
+
+        if (toolCallStage === 'update') {
+          provider.postMessage(
+            createToolCallUpdateMessage(currentResponseId, toolCall.id, {
+              title: toolCall.title,
+              status: 'in_progress',
+              kind: toolCall.kind,
+              rawInput: toolCall.rawInput,
+              contentPreview: toolCall.contentPreview,
+            })
+          );
+          toolCallStage = 'complete';
+          scheduleNextStep(toolCall.inProgressDelay);
+          return true;
+        }
+
+        if (toolCallStage === 'complete') {
+          provider.postMessage(
+            createToolCallUpdateMessage(currentResponseId, toolCall.id, {
+              title: toolCall.title,
+              status: toolCall.finalStatus,
+              kind: toolCall.kind,
+              rawInput: toolCall.rawInput,
+              rawOutput: toolCall.rawOutput,
+              contentPreview: toolCall.contentPreview,
+            })
+          );
+          log.info(`[Mock] Tool call ${toolCall.finalStatus}: ${toolCall.title}`);
+          toolCallStage = 'done';
+          scheduleNextStep(180);
+          return true;
+        }
+
+        phase = nextPhase;
+        toolCallStage = 'start';
+        return false;
+      };
 
       const streamNextToken = (): void => {
-        if (mockStreamingCancelled || tokenIndex >= tokens.length) {
+        if (mockStreamingCancelled) {
+          mockStreamingTimer = null;
+          currentResponseId = null;
+          return;
+        }
+
+        if (currentResponseId && thinkingTokenIndex < thinkingTokens.length) {
+          provider.postMessage(
+            createThinkingDeltaMessage(currentResponseId, thinkingTokens[thinkingTokenIndex])
+          );
+          thinkingTokenIndex++;
+
+          const delay = 20 + Math.random() * 60;
+          mockStreamingTimer = setTimeout(streamNextToken, delay);
+          return;
+        }
+
+        if (phase === 'intro' && introTokens.length > 0) {
+          if (currentResponseId) {
+            const nextToken = introTokens.shift();
+            if (nextToken !== undefined) {
+              provider.postMessage(createStreamTokenMessage(currentResponseId, nextToken, false));
+            }
+          }
+          scheduleNextStep(20 + Math.random() * 60);
+          return;
+        }
+
+        if (phase === 'intro') {
+          phase = 'tool1';
+        }
+
+        if (phase === 'tool1' && runToolCallStep(scriptedToolCalls[0], 'middle')) {
+          return;
+        }
+
+        if (phase === 'middle' && middleTokens.length > 0) {
+          if (currentResponseId) {
+            const nextToken = middleTokens.shift();
+            if (nextToken !== undefined) {
+              provider.postMessage(createStreamTokenMessage(currentResponseId, nextToken, false));
+            }
+          }
+          scheduleNextStep(20 + Math.random() * 60);
+          return;
+        }
+
+        if (phase === 'middle') {
+          phase = 'tool2';
+        }
+
+        if (phase === 'tool2' && runToolCallStep(scriptedToolCalls[1], 'outro')) {
+          return;
+        }
+
+        if (phase === 'outro' && outroTokens.length > 0) {
+          if (currentResponseId) {
+            const nextToken = outroTokens.shift();
+            if (nextToken !== undefined) {
+              provider.postMessage(createStreamTokenMessage(currentResponseId, nextToken, false));
+            }
+          }
+          scheduleNextStep(20 + Math.random() * 60);
+          return;
+        }
+
+        if (phase === 'outro') {
+          phase = 'done';
+        }
+
+        if (phase === 'done') {
           if (!mockStreamingCancelled && currentResponseId) {
             provider.postMessage(createGenerationCompleteMessage(currentResponseId));
             log.info('[Mock] Generation complete');
@@ -92,17 +344,6 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
           currentResponseId = null;
           return;
         }
-
-        if (currentResponseId) {
-          provider.postMessage(
-            createStreamTokenMessage(currentResponseId, tokens[tokenIndex], false)
-          );
-        }
-        tokenIndex++;
-
-        // Random delay between 20-80ms for realistic streaming feel
-        const delay = 20 + Math.random() * 60;
-        mockStreamingTimer = setTimeout(streamNextToken, delay);
       };
 
       // Start streaming after a small initial delay
@@ -128,57 +369,8 @@ function setupMockStreaming(provider: WebviewProvider, log: Logger): void {
   log.info('[Mock] Mock streaming handler registered');
 }
 
-/** ACP streaming content block types */
-type AcpStreamContentBlock =
-  | { readonly type: 'text'; readonly text: string }
-  | {
-      readonly type: 'resource_link';
-      readonly uri: string;
-      readonly name: string;
-      readonly mimeType?: string;
-    }
-  | {
-      readonly type: 'resource';
-      readonly resource: {
-        readonly uri: string;
-        readonly text?: string;
-        readonly blob?: string;
-        readonly mimeType?: string;
-      };
-    };
-
-interface AcpSessionUpdateParams {
-  readonly sessionId: string;
-  readonly update: {
-    readonly sessionUpdate: string;
-    readonly content?: AcpStreamContentBlock;
-  };
-}
-
-interface AcpPromptResponse {
-  readonly stopReason: 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
-}
-
-interface AcpInitializeResponse {
-  readonly protocolVersion: number;
-  readonly agentCapabilities?: {
-    readonly loadSession?: boolean;
-    readonly promptCapabilities?: {
-      readonly audio?: boolean;
-      readonly image?: boolean;
-      readonly embeddedContext?: boolean;
-    };
-  };
-  readonly agentInfo?: {
-    readonly name?: string;
-    readonly version?: string;
-  };
-}
-
 /** ACP prompt content block types */
-type AcpContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'resource_link'; uri: string; name: string; mimeType?: string };
+type AcpContentBlock = Extract<ContentBlock, { type: 'text' | 'resource_link' }>;
 
 /** Get MIME type from file path */
 function getMimeType(filePath: string): string {
@@ -272,6 +464,91 @@ async function buildPromptBlocks(
   return blocks;
 }
 
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function extractToolPresentation(content: unknown): {
+  previewLines?: string[];
+} {
+  if (!Array.isArray(content)) return {};
+
+  const lines = content.flatMap(item => {
+    if (!item || typeof item !== 'object') return [];
+
+    const contentItem = item as Record<string, unknown>;
+    if (contentItem.type === 'content') {
+      const block = contentItem.content as Record<string, unknown> | undefined;
+      if (block?.type === 'text' && typeof block.text === 'string') {
+        return block.text
+          .split('\n')
+          .map(line => line.trimEnd())
+          .filter(Boolean);
+      }
+    }
+
+    if (contentItem.type === 'diff') {
+      const path = typeof contentItem.path === 'string' ? contentItem.path : 'unknown';
+      return [`diff: ${path}`];
+    }
+
+    if (contentItem.type === 'terminal') {
+      const terminalId =
+        typeof contentItem.terminalId === 'string' ? contentItem.terminalId : 'unknown';
+      return [`terminal: ${terminalId}`];
+    }
+
+    return [];
+  });
+
+  if (lines.length === 0) return {};
+
+  const previewLines = lines.slice(0, 6).map(line => truncateText(line, 160));
+  return {
+    previewLines,
+  };
+}
+
+function summarizeSessionUpdate(update: SessionNotification['update']): Record<string, unknown> {
+  const base = {
+    sessionUpdate: update.sessionUpdate,
+  };
+
+  if ('content' in update && !Array.isArray(update.content)) {
+    return {
+      ...base,
+      contentType: update.content.type,
+      textPreview: update.content.type === 'text' ? update.content.text.slice(0, 120) : undefined,
+    };
+  }
+
+  if (update.sessionUpdate === 'tool_call') {
+    return {
+      ...base,
+      toolCallId: update.toolCallId,
+      title: update.title,
+      status: update.status,
+      kind: update.kind,
+    };
+  }
+
+  if (update.sessionUpdate === 'tool_call_update') {
+    return {
+      ...base,
+      toolCallId: update.toolCallId,
+      title: update.title,
+      status: update.status,
+      kind: update.kind,
+      hasRawInput: update.rawInput !== undefined,
+      hasRawOutput: update.rawOutput !== undefined,
+      contentItems: Array.isArray(update.content) ? update.content.length : 0,
+    };
+  }
+
+  return base;
+}
+
 async function initializeAcpSession(
   client: JsonRpcClient,
   workingDirectory: string,
@@ -281,8 +558,8 @@ async function initializeAcpSession(
   log.info('Initializing ACP connection...');
 
   // Call ACP initialize to get agent capabilities
-  const initResult = await client.request<AcpInitializeResponse>('initialize', {
-    protocolVersion: 1,
+  const initResult = await client.request<InitializeResponse>(AGENT_METHODS.initialize, {
+    protocolVersion: PROTOCOL_VERSION,
     clientInfo: {
       name: 'vscode-goose',
       version: '0.1.0',
@@ -308,6 +585,7 @@ async function initializeAcpSession(
     if (agentCaps) {
       capabilities = {
         loadSession: agentCaps.loadSession ?? DEFAULT_CAPABILITIES.loadSession,
+        listSessions: agentCaps.sessionCapabilities?.list !== undefined,
         promptCapabilities: {
           image: agentCaps.promptCapabilities?.image ?? false,
           audio: agentCaps.promptCapabilities?.audio ?? false,
@@ -315,7 +593,7 @@ async function initializeAcpSession(
         },
       };
       log.info(
-        `Agent capabilities: loadSession=${capabilities.loadSession}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`
+        `Agent capabilities: loadSession=${capabilities.loadSession}, listSessions=${capabilities.listSessions}, embeddedContext=${capabilities.promptCapabilities.embeddedContext}`
       );
     }
   } else {
@@ -324,18 +602,36 @@ async function initializeAcpSession(
 
   manager.initialize(client, capabilities, workingDirectory);
 
+  if (manager.hasListSessionsCapability()) {
+    const sessionsResult = await manager.listSessions()();
+    if (E.isLeft(sessionsResult)) {
+      log.warn('Failed to fetch session list during initialization:', sessionsResult.left);
+    }
+  }
+
+  const existingSessionId = manager.getActiveSessionId();
   const existingSession = manager.getActiveSession();
-  if (existingSession) {
-    log.info(`Found existing session: ${existingSession.sessionId}, attempting to restore...`);
+  if (existingSessionId) {
+    log.info(`Found existing session: ${existingSessionId}, attempting to restore...`);
 
     // Try to restore the session with the server
     if (manager.hasLoadSessionCapability()) {
-      const loadResult = await manager.loadSession(existingSession.sessionId)();
+      const loadResult = await manager.loadSession(existingSessionId)();
       if (E.isRight(loadResult)) {
-        log.info(`Successfully restored session: ${existingSession.sessionId}`);
-        return existingSession;
+        log.info(`Successfully restored session: ${existingSessionId}`);
+        return (
+          existingSession ?? {
+            sessionId: existingSessionId,
+            title: 'New Session',
+            cwd: workingDirectory,
+            updatedAt: new Date().toISOString(),
+          }
+        );
       }
-      log.warn(`Failed to restore session ${existingSession.sessionId}, creating new session`);
+      if (manager.hasListSessionsCapability()) {
+        await sessionStorage?.clearActiveSession();
+      }
+      log.warn(`Failed to restore session ${existingSessionId}, creating new session`);
     } else {
       // Server doesn't support session/load - create a fresh session
       log.info('Server does not support session/load, creating new session');
@@ -361,23 +657,89 @@ function setupAcpCommunication(
 ): void {
   let currentResponseId: string | null = null;
 
+  const postSessionList = async (activeSessionId: string | null): Promise<void> => {
+    const result = await manager.listSessions()();
+    if (E.isRight(result)) {
+      provider.postMessage(createSessionsListMessage(result.right, activeSessionId));
+    } else {
+      log.error('Failed to fetch session list:', result.left);
+      provider.postMessage(createSessionsListMessage(manager.getSessions(), activeSessionId));
+    }
+  };
+
   const getActiveSessionId = (): string | null => {
     return manager.getActiveSessionId();
   };
 
   client.onNotification((notification: JsonRpcNotification) => {
     const method = notification.method;
-    const params = notification.params as AcpSessionUpdateParams | undefined;
+    const params = notification.params as SessionNotification | undefined;
 
     if (method === 'session/update' && params?.update) {
-      const { sessionUpdate, content } = params.update;
+      log.debug('ACP session/update received', {
+        sessionId: params.sessionId,
+        responseId: currentResponseId,
+        update: summarizeSessionUpdate(params.update),
+      });
+
+      const { sessionUpdate } = params.update;
+
+      if (!currentResponseId) return;
 
       if (
         sessionUpdate === 'agent_message_chunk' &&
-        currentResponseId &&
-        content?.type === 'text'
+        'content' in params.update &&
+        !Array.isArray(params.update.content) &&
+        params.update.content.type === 'text'
       ) {
-        provider.postMessage(createStreamTokenMessage(currentResponseId, content.text, false));
+        provider.postMessage(
+          createStreamTokenMessage(currentResponseId, params.update.content.text, false)
+        );
+        return;
+      }
+
+      if (
+        sessionUpdate === 'agent_thought_chunk' &&
+        'content' in params.update &&
+        !Array.isArray(params.update.content) &&
+        params.update.content.type === 'text'
+      ) {
+        provider.postMessage(
+          createThinkingDeltaMessage(currentResponseId, params.update.content.text)
+        );
+        return;
+      }
+
+      if (sessionUpdate === 'tool_call') {
+        provider.postMessage(
+          createToolCallStartMessage(
+            currentResponseId,
+            params.update.toolCallId,
+            params.update.title,
+            params.update.status,
+            {
+              kind: params.update.kind,
+              rawInput: params.update.rawInput,
+              locations: params.update.locations,
+            }
+          )
+        );
+        return;
+      }
+
+      if (sessionUpdate === 'tool_call_update') {
+        const presentation = extractToolPresentation(params.update.content);
+        provider.postMessage(
+          createToolCallUpdateMessage(currentResponseId, params.update.toolCallId, {
+            title: params.update.title ?? undefined,
+            status: params.update.status ?? undefined,
+            kind: params.update.kind ?? undefined,
+            rawInput: params.update.rawInput,
+            rawOutput: params.update.rawOutput,
+            contentPreview: presentation.previewLines,
+            locations: params.update.locations ?? undefined,
+          })
+        );
       }
     }
   });
@@ -388,6 +750,10 @@ function setupAcpCommunication(
 
   manager.onHistoryComplete((sessionId, messageCount) => {
     provider.postMessage(createHistoryCompleteMessage(sessionId, messageCount));
+  });
+
+  manager.onSettingsChange(settings => {
+    provider.postMessage(createSessionSettingsMessage(settings));
   });
 
   provider.onMessage(message => {
@@ -409,19 +775,20 @@ function setupAcpCommunication(
         log.info(`With ${contextChips.length} context chip(s)`);
       }
 
-      const activeSession = manager.getActiveSession();
-      if (activeSession && activeSession.title === 'New Session') {
-        manager.updateSessionTitle(activeSession.sessionId, content);
-      }
-
       const sendRequest = async (): Promise<void> => {
         // Build prompt content blocks with resource links for context
         const promptBlocks = await buildPromptBlocks(content, contextChips, log);
 
-        const result = await client.request<AcpPromptResponse>('session/prompt', {
-          sessionId: activeSessionId,
-          prompt: promptBlocks,
-        })();
+        const result = await client.request<PromptResponse>(
+          AGENT_METHODS.session_prompt,
+          {
+            sessionId: activeSessionId,
+            prompt: promptBlocks,
+          },
+          {
+            timeoutMs: null,
+          }
+        )();
 
         if (E.isLeft(result)) {
           log.error('ACP request failed:', result.left);
@@ -433,11 +800,16 @@ function setupAcpCommunication(
             )
           );
           if (currentResponseId) {
-            provider.postMessage(createGenerationCancelledMessage(currentResponseId));
+            provider.postMessage(
+              createGenerationErrorMessage(currentResponseId, result.left.message)
+            );
             currentResponseId = null;
           }
         } else {
-          log.info(`Generation completed with stopReason: ${result.right.stopReason}`);
+          log.info(`Generation completed with stopReason: ${result.right.stopReason}`, {
+            responseId: currentResponseId,
+            sessionId: activeSessionId,
+          });
           if (currentResponseId) {
             if (result.right.stopReason === 'cancelled') {
               provider.postMessage(createGenerationCancelledMessage(currentResponseId));
@@ -467,15 +839,15 @@ function setupAcpCommunication(
       log.info('Creating new session...');
       manager
         .createSession()()
-        .then(result => {
+        .then(async result => {
           if (E.isRight(result)) {
             provider.postMessage(createSessionCreatedMessage(result.right));
-            provider.postMessage(
-              createSessionsListMessage(manager.getSessions(), result.right.sessionId)
-            );
+            await postSessionList(result.right.sessionId);
+            provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
             log.info(`New session created: ${result.right.sessionId}`);
           } else {
             log.error('Failed to create session:', result.left);
+            await postSessionList(manager.getActiveSessionId());
             provider.postMessage(
               createErrorMessage('Session Creation Failed', result.left.message)
             );
@@ -485,9 +857,8 @@ function setupAcpCommunication(
 
     if (isGetSessionsMessage(message)) {
       log.debug('Sending session list');
-      provider.postMessage(
-        createSessionsListMessage(manager.getSessions(), manager.getActiveSessionId())
-      );
+      void postSessionList(manager.getActiveSessionId());
+      provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
     }
 
     if (isSelectSessionMessage(message)) {
@@ -499,16 +870,42 @@ function setupAcpCommunication(
 
       manager
         .loadSession(sessionId)()
-        .then(result => {
+        .then(async result => {
           if (E.isRight(result)) {
             provider.postMessage(
               createSessionLoadedMessage(sessionId, !manager.hasLoadSessionCapability())
             );
-            provider.postMessage(createSessionsListMessage(manager.getSessions(), sessionId));
+            await postSessionList(sessionId);
+            provider.postMessage(createSessionSettingsMessage(manager.getSessionSettings()));
             log.info(`Session loaded: ${sessionId}`);
           } else {
             log.error('Failed to load session:', result.left);
+            await postSessionList(manager.getActiveSessionId());
             provider.postMessage(createErrorMessage('Session Load Failed', result.left.message));
+          }
+        });
+    }
+
+    if (isSetSessionModeMessage(message)) {
+      const { modeId } = message.payload;
+      manager
+        .setSessionMode(modeId)()
+        .then(result => {
+          if (E.isLeft(result)) {
+            log.error('Failed to set session mode:', result.left);
+            provider.postMessage(createErrorMessage('Mode Update Failed', result.left.message));
+          }
+        });
+    }
+
+    if (isSetSessionModelMessage(message)) {
+      const { modelId } = message.payload;
+      manager
+        .setSessionModel(modelId)()
+        .then(result => {
+          if (E.isLeft(result)) {
+            log.error('Failed to set session model:', result.left);
+            provider.postMessage(createErrorMessage('Model Update Failed', result.left.message));
           }
         });
     }
@@ -610,7 +1007,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   fileSearchService = createFileSearchService(logger.child('FileSearch'));
   setupFileSearchHandler(webviewProvider, fileSearchService, logger.child('FileSearch'));
 
-  const binaryResult = discoverBinary(getBinaryDiscoveryConfig());
+  const binaryConfig = getBinaryDiscoveryConfig();
+  if (isMockBinaryPath(binaryConfig.userConfiguredPath)) {
+    logger.info('[Mock] Explicit mock mode enabled via goose.binaryPath');
+    webviewProvider.updateStatus(ProcessStatus.RUNNING);
+    setupMockStreaming(webviewProvider, logger.child('Mock'));
+    registerConfigChangeHandler(context);
+    logger.info('Goose extension activated.');
+    return;
+  }
+
+  const binaryResult = discoverBinary(binaryConfig);
 
   if (E.isLeft(binaryResult)) {
     const error = binaryResult.left;
@@ -691,6 +1098,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const clientResult = subprocessManager.getClient();
     if (E.isRight(clientResult)) {
       const client = clientResult.right;
+      setupAcpCommunication(webviewProvider, client, sessionManager, logger.child('ACP'));
       const session = await initializeAcpSession(
         client,
         getWorkspaceFolder(),
@@ -699,7 +1107,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
 
       if (session) {
-        setupAcpCommunication(webviewProvider, client, sessionManager, logger.child('ACP'));
+        webviewProvider.postMessage(
+          createSessionsListMessage(
+            sessionManager.getSessions(),
+            sessionManager.getActiveSessionId()
+          )
+        );
+        webviewProvider.postMessage(
+          createSessionSettingsMessage(sessionManager.getSessionSettings())
+        );
         logger.info('ACP communication enabled');
       } else {
         setupMockStreaming(webviewProvider, logger.child('Mock'));

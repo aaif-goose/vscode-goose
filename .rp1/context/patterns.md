@@ -1,7 +1,7 @@
 # Implementation Patterns
 
 **Project**: VS Code Goose
-**Last Updated**: 2025-12-21
+**Last Updated**: 2026-03-28
 
 ## Naming & Organization
 
@@ -63,7 +63,7 @@ Evidence: src/extension/subprocessManager.ts:86-102, src/extension/jsonRpcClient
 ## Concurrency & Async
 
 **Async Usage**: TaskEither for async operations, Promise-based waitForReady()
-**Patterns**: Message queue with flush on ready, debounced search (100ms)
+**Patterns**: Message queue with flush on ready, debounced search (100ms), per-request JSON-RPC timeout overrides
 **Cleanup**: Returned unsubscribe functions for event handlers
 
 Evidence: src/extension/webviewProvider.ts:147-154, src/webview/hooks/useFilePicker.ts:99-106
@@ -75,6 +75,9 @@ Evidence: src/extension/webviewProvider.ts:147-154, src/webview/hooks/useFilePic
 **Focus Management**: Arrow keys for chip navigation, focus restoration on removal
 **Accessibility**: aria-live regions for announcements, role=list/listitem, sr-only class
 **@ Trigger Detection**: Scan backwards from cursor for @ at word boundary
+**Structured Streaming UI**: assistant replies are composed from ordered `contentParts` rather than a single markdown blob
+**Progressive Disclosure**: tool calls render as collapsible cards with a concise summary and expandable raw details
+**Responsive Layout**: history pane shifts between split and overlay modes based on available width
 
 Evidence: src/webview/hooks/useChat.ts:25-36, src/webview/components/chat/ChipStack.tsx:34-99
 
@@ -84,5 +87,7 @@ Evidence: src/webview/hooks/useChat.ts:25-36, src/webview/components/chat/ChipSt
 **Ready Sync**: Promise-based waitForReady() with callback accumulation
 **Factory-Guards**: Paired createXMessage() factory and isXMessage() type guard
 **State Resend**: Re-send lastStatus/lastVersionStatus on webview reconnect
+**Session Settings Sync**: normalize ACP session metadata into a lightweight webview state object and reflect updates both ways
+**Prompt Lifetime**: long-running `session/prompt` requests opt out of the default JSON-RPC timeout to avoid false cancellation
 
 Evidence: src/webview/bridge.ts:38-55, src/extension/webviewProvider.ts:105-120

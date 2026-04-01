@@ -45,7 +45,7 @@
         "goose.binaryPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the goose binary. Leave empty for auto-detection."
+          "description": "Path to the goose binary. Leave empty for auto-detection, or set to 'mock' to force mock streaming mode."
         },
         "goose.logLevel": {
           "type": "string",
@@ -111,6 +111,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "file:../acp-typescript-sdk",
     "fp-ts": "^2.16.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.1",

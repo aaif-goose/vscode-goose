@@ -74,7 +74,7 @@ function detectAtTrigger(
 
 export function useFilePicker(
   onAddChip: (result: FileSearchResult) => void,
-  inputRef: RefObject<HTMLTextAreaElement>,
+  inputRef: RefObject<HTMLTextAreaElement | null>,
   onInputChange?: (value: string) => void
 ): UseFilePickerReturn {
   const [state, setState] = useState<FilePickerState>(initialState);

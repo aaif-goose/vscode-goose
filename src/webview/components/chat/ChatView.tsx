@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
 import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
+import { SessionSettingsState } from '../../../shared/sessionTypes';
 import { UseChatReturn } from '../../hooks/useChat';
 import { UseContextChipsReturn } from '../../hooks/useContextChips';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
@@ -10,14 +11,24 @@ interface ChatViewProps {
   className?: string;
   chat: UseChatReturn;
   contextChips: UseContextChipsReturn;
+  activeSessionId: string | null;
+  settings: SessionSettingsState;
+  setSessionMode: (modeId: string) => void;
+  setSessionModel: (modelId: string) => void;
 }
 
-export function ChatView({ className = '', chat, contextChips }: ChatViewProps) {
+export function ChatView({
+  className = '',
+  chat,
+  contextChips,
+  activeSessionId,
+  settings,
+  setSessionMode,
+  setSessionModel,
+}: ChatViewProps) {
   const {
     messages,
     isGenerating,
-    inputValue,
-    setInputValue,
     sendMessage,
     stopGeneration,
     focusedIndex,
@@ -83,12 +94,10 @@ export function ChatView({ className = '', chat, contextChips }: ChatViewProps) 
         messages={messages}
         isGenerating={isGenerating}
         focusedIndex={focusedIndex}
-        onMessageFocus={setFocusedIndex}
         onRetry={retryMessage}
       />
       <InputArea
-        value={inputValue}
-        onChange={setInputValue}
+        activeSessionId={activeSessionId}
         onSend={sendMessage}
         onStop={stopGeneration}
         isGenerating={isGenerating}
@@ -100,6 +109,9 @@ export function ChatView({ className = '', chat, contextChips }: ChatViewProps) 
         onClearChips={clearChips}
         onAddFileChip={handleAddFileChip}
         chipAnnouncement={chipAnnouncement}
+        settings={settings}
+        onModeChange={setSessionMode}
+        onModelChange={setSessionModel}
       />
     </div>
   );

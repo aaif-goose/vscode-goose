@@ -1,16 +1,14 @@
-import { useState } from 'react';
 import { getLanguageFromPath, parseContent } from '../../../shared/fileReferenceParser';
 import { MessageContext } from '../../../shared/types';
 import { FileTypeIcon } from '../icons/FileTypeIcon';
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
 import { FileReferenceCard } from './FileReferenceCard';
 
-const MAX_LINES_COLLAPSED = 15;
-
 interface UserMessageProps {
   content: string;
   timestamp?: Date;
   context?: readonly MessageContext[];
+  isFocused?: boolean;
 }
 
 function formatTime(date?: Date): string {
@@ -25,23 +23,7 @@ function formatContextLabel(ctx: MessageContext): string {
   return ctx.fileName;
 }
 
-function truncateContent(
-  content: string,
-  maxLines: number
-): { truncated: string; isTruncated: boolean; totalLines: number } {
-  const lines = content.split('\n');
-  if (lines.length <= maxLines) {
-    return { truncated: content, isTruncated: false, totalLines: lines.length };
-  }
-  return {
-    truncated: lines.slice(0, maxLines).join('\n') + '\n...',
-    isTruncated: true,
-    totalLines: lines.length,
-  };
-}
-
-export function UserMessage({ content, timestamp, context }: UserMessageProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export function UserMessage({ content, timestamp, context, isFocused = false }: UserMessageProps) {
   const hasTextContent = content.trim().length > 0;
   const hasContext = context && context.length > 0;
 
@@ -49,15 +31,9 @@ export function UserMessage({ content, timestamp, context }: UserMessageProps) {
   const parsedContent = parseContent(content);
   const isFileReference = parsedContent.type === 'file_reference';
 
-  // Only truncate history messages (no timestamp) that aren't file references
-  const isHistoryMessage = !timestamp;
-  const { truncated, isTruncated, totalLines } = truncateContent(content, MAX_LINES_COLLAPSED);
-  const displayContent =
-    isHistoryMessage && isTruncated && !isExpanded && !isFileReference ? truncated : content;
-
   return (
     <div className="flex flex-col items-end">
-      <div className="ml-auto max-w-[80%]">
+      <div className="ml-auto flex w-fit max-w-[80%] flex-col items-end">
         {/* Context badges - same UI for input and history */}
         {hasContext && (
           <div className="flex flex-wrap gap-1 justify-end mb-1">
@@ -82,22 +58,19 @@ export function UserMessage({ content, timestamp, context }: UserMessageProps) {
           <FileReferenceCard reference={parsedContent.reference} />
         ) : hasTextContent ? (
           /* Text content */
-          <div className="bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-2xl px-4 py-2">
-            <MarkdownRenderer content={displayContent} variant="bubble" />
-            {isHistoryMessage && isTruncated && (
-              <button
-                type="button"
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="mt-2 text-xs opacity-70 hover:opacity-100 underline"
-              >
-                {isExpanded ? 'Show less' : `Show more (${totalLines} lines)`}
-              </button>
-            )}
+          <div
+            className={`max-w-full rounded-2xl bg-[var(--vscode-button-background)] px-4 py-2 text-left text-[var(--vscode-button-foreground)] transition-shadow ${
+              isFocused
+                ? 'ring-2 ring-[var(--vscode-focusBorder)] ring-offset-2 ring-offset-[var(--vscode-editor-background)]'
+                : ''
+            }`}
+          >
+            <MarkdownRenderer content={content} variant="bubble" />
           </div>
         ) : null}
 
         <p
-          className={`text-xs text-[var(--vscode-descriptionForeground)] mt-1 text-right ${!timestamp ? 'italic' : ''}`}
+          className={`mt-1 text-right text-[11px] text-[var(--vscode-descriptionForeground)] ${!timestamp ? 'italic' : ''}`}
         >
           {formatTime(timestamp)}
         </p>

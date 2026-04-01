@@ -2,7 +2,7 @@
 
 **Project**: VS Code Goose
 **Architecture Pattern**: Bridge/Adapter with Message-Driven Communication
-**Last Updated**: 2025-12-21
+**Last Updated**: 2026-03-28
 
 ## High-Level Architecture
 
@@ -61,7 +61,7 @@ Four distinct layers with unidirectional dependencies:
 
 ### Message-Driven Communication
 
-All communication between webview and extension uses a strongly-typed message passing system with 24 message types, factory functions, and type guards.
+All communication between webview and extension uses a strongly-typed message passing system with factory functions and type guards. Recent additions expanded the protocol to cover structured assistant streaming, tool call lifecycle events, and session settings updates.
 
 ### Gated Activation
 
@@ -88,13 +88,16 @@ Multi-stage activation gate: binary discovery → version validation → subproc
 **Location**: `src/webview/`
 **Components**:
 
-- `App.tsx` - Root component with status, session and chat state
+- `App.tsx` - Root component with status, session/chat state, and right-side history pane layout
 - `bridge.ts` - postMessage abstraction for extension communication
 - `ChatView.tsx` - Chat container with keyboard navigation
-- `InputArea.tsx` - Input with chips, file picker integration
-- `useChat.ts` - Reducer-based chat state management
+- `InputArea.tsx` - Input with chips, file picker integration, and mode/model controls
+- `useChat.ts` - Reducer-based chat state management for text/thinking/tool-call streams
+- `useSession.ts` - Session list, loading state, pane visibility, and session setting updates
 - `useContextChips.ts` - Chip state management
 - `useFilePicker.ts` - @ mention detection and search
+- `ThinkingBlock.tsx` - Collapsible rendering for assistant thinking traces
+- `ToolCallCard.tsx` - Tool call lifecycle card with previews and raw details
 
 ### Shared Layer
 
@@ -125,11 +128,11 @@ sequenceDiagram
     Extension->>JsonRpc: session/prompt request
     JsonRpc->>goose: JSON-RPC via stdin
 
-    loop Streaming Response
+    loop Structured Streaming Response
         goose-->>JsonRpc: session/update notification
         JsonRpc-->>Extension: onNotification callback
-        Extension-->>Webview: STREAM_TOKEN
-        Webview-->>User: Render markdown chunk
+        Extension-->>Webview: STREAM_TOKEN / THINKING_DELTA / TOOL_CALL_*
+        Webview-->>User: Render markdown, thinking blocks, and tool cards
     end
 
     Extension-->>Webview: GENERATION_COMPLETE
@@ -162,13 +165,27 @@ sequenceDiagram
 4. If version fails: `updateVersionStatus()` blocks UI
 5. If version passes: spawn subprocess
 
+### Session Settings Flow
+
+1. `session/new` or `session/load` returns available mode/model metadata
+2. `sessionManager.ts` normalizes ACP metadata into `SessionSettingsState`
+3. Extension sends SESSION_SETTINGS to the webview
+4. `SessionSettingsBar` renders mode/model selectors in the composer
+5. User changes are sent back as `SET_SESSION_MODE` / `SET_SESSION_MODEL`
+6. Extension maps those to ACP `session/set_mode`, `session/set_model`, or `session/set_config_option`
+
+### Prompt Execution Without Local Timeout
+
+`session/prompt` requests are issued with `timeoutMs: null`, so the client waits for Goose to finish instead of treating long-running responses as cancellations.
+
 ## Integration Points
 
 ### Goose ACP Subprocess
 
 - **Protocol**: JSON-RPC 2.0 over stdin/stdout (ndjson framing)
-- **Methods**: `initialize`, `session/new`, `session/load`, `session/prompt`
-- **Notifications**: `session/cancel`, `session/update`
+- **Methods**: `initialize`, `session/new`, `session/load`, `session/prompt`, `session/set_mode`, `session/set_model`, `session/set_config_option`
+- **Notifications Received**: `session/update`
+- **Notifications Sent**: `session/cancel`
 - **Version Requirement**: >= 1.16.0
 
 ### VS Code APIs
@@ -181,7 +198,7 @@ sequenceDiagram
 ## Deployment
 
 - **Distribution**: VS Code Marketplace via VSIX
-- **Build**: Bun bundler, Webpack, Tailwind CSS v4
+- **Build**: Bun bundler and Tailwind CSS v4
 - **Linting**: Biome for formatting and linting
 - **Webview Options**: `retainContextWhenHidden: true`
 - **Version Gate**: Checks goose >= 1.16.0 before subprocess spawn

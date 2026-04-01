@@ -1,7 +1,7 @@
 # Module & Component Breakdown
 
 **Project**: VS Code Goose
-**Analysis Date**: 2025-12-21
+**Analysis Date**: 2026-03-28
 **Modules Analyzed**: 7 module groups
 
 ## Core Modules
@@ -15,8 +15,8 @@
 |-----------|------|---------|
 | Extension Entry | `extension.ts` | Orchestrates activation, ACP session init, wires components |
 | SubprocessManager | `subprocessManager.ts` | Spawns goose binary, manages lifecycle events |
-| JsonRpcClient | `jsonRpcClient.ts` | JSON-RPC 2.0 client with ndjson framing |
-| SessionManager | `sessionManager.ts` | Session lifecycle, history replay, ACP coordination |
+| JsonRpcClient | `jsonRpcClient.ts` | JSON-RPC 2.0 client with optional per-request timeout override |
+| SessionManager | `sessionManager.ts` | Session lifecycle, history replay, ACP coordination, session settings normalization |
 | WebviewProvider | `webviewProvider.ts` | Webview lifecycle, message queue, ready sync |
 | Commands | `commands.ts` | Command registration (showLogs, restart, sendSelectionToChat) |
 | VersionChecker | `versionChecker.ts` | Binary version validation (>= 1.16.0) |
@@ -33,10 +33,10 @@
 **Key Components**:
 | Component | File | Purpose |
 |-----------|------|---------|
-| Messages | `messages.ts` | 24 WebviewMessage types, factories, guards (~700 lines) |
-| Types | `types.ts` | ProcessStatus, ChatMessage, MessageRole, MessageContext |
+| Messages | `messages.ts` | Webview protocol for chat, sessions, search, thinking, tool calls, and settings |
+| Types | `types.ts` | ProcessStatus, ChatMessage, MessageRole, MessageContext, content parts |
 | ContextTypes | `contextTypes.ts` | ContextChip, FileSearchResult, LineRange |
-| SessionTypes | `sessionTypes.ts` | SessionEntry, AgentCapabilities, groupSessionsByDate |
+| SessionTypes | `sessionTypes.ts` | SessionEntry, AgentCapabilities, grouped sessions, session settings state |
 | Errors | `errors.ts` | GooseError discriminated union, factory functions |
 | FileReferenceParser | `fileReferenceParser.ts` | Parse file references from markdown |
 | Index | `index.ts` | Re-exports for convenient imports |
@@ -47,7 +47,7 @@
 
 **Sub-modules**:
 - `hooks/` - State management hooks (6 files)
-- `components/chat/` - Chat UI components (15 files)
+- `components/chat/` - Chat UI components (18 files)
 - `components/picker/` - File picker dropdown (2 files)
 - `components/icons/` - File type icons (2 files)
 - `components/session/` - Session management UI (3 files)
@@ -69,6 +69,7 @@
 **Purpose**: JSON-RPC 2.0 over stdin/stdout with ndjson framing
 **Responsibilities**:
 - Send requests with timeout handling
+- Allow per-request timeout overrides, including no timeout for long-running prompts
 - Route responses and notifications
 - Manage pending request lifecycle
 
@@ -79,6 +80,8 @@
 - Create new ACP sessions
 - Load sessions with history replay
 - Track active session and capabilities
+- Normalize ACP mode/model metadata into webview-facing selector state
+- Apply live session mode/model updates back to ACP
 - TaskEither-based API for error handling
 
 ### WebviewProvider
@@ -95,9 +98,17 @@
 **Purpose**: Chat message state management
 **Responsibilities**:
 - Reducer-based state with typed actions
-- Handle streaming tokens
+- Handle structured streaming tokens, thinking deltas, and tool call updates
 - Send messages with context chips
 - Persist input draft
+
+### useSession Hook
+**File**: `src/webview/hooks/useSession.ts`
+**Purpose**: Session list and active-session UI state
+**Responsibilities**:
+- Track session list, active session, and history loading state
+- Manage right-side history pane visibility
+- Surface ACP-backed mode/model selector state to the composer
 
 ### useContextChips Hook
 **File**: `src/webview/hooks/useContextChips.ts`
@@ -174,6 +185,12 @@ Webview @ trigger → shared/messages → extension/fileSearchService → shared
 
 ### Version Gating
 extension/versionChecker → shared/messages → webview/VersionBlockedView
+
+### Structured Assistant Streaming
+ACP `session/update` → extension translation layer → STREAM_TOKEN / THINKING_DELTA / TOOL_CALL messages → `useChat` content parts → `AssistantMessage`, `ThinkingBlock`, `ToolCallCard`
+
+### Session Settings
+ACP session metadata → `sessionManager.ts` normalization → SESSION_SETTINGS → `SessionSettingsBar` → SET_SESSION_MODE / SET_SESSION_MODEL → ACP session setting methods
 
 ### Bridge Communication
 Extension and webview communicate via typed postMessage with factories and guards. Messages are queued until webview ready.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer } from 'react';
 import type { ContextChip } from '../../shared/contextTypes';
 import {
   ContextChipData,
@@ -7,18 +7,29 @@ import {
   isChatHistoryMessage,
   isGenerationCancelledMessage,
   isGenerationCompleteMessage,
+  isGenerationErrorMessage,
   isHistoryMessage,
   isSessionCreatedMessage,
   isStreamTokenMessage,
+  isThinkingDeltaMessage,
+  isToolCallStartMessage,
+  isToolCallUpdateMessage,
 } from '../../shared/messages';
-import { ChatMessage, MessageContext, MessageRole, MessageStatus } from '../../shared/types';
-import { getState, onMessage, postMessage, setState } from '../bridge';
+import {
+  ChatContentPart,
+  ChatMessage,
+  MessageContext,
+  MessageRole,
+  MessageStatus,
+  ThinkingPart,
+  ToolCallPart,
+} from '../../shared/types';
+import { onMessage, postMessage } from '../bridge';
 
 interface ChatState {
   messages: ChatMessage[];
   isGenerating: boolean;
   currentResponseId: string | null;
-  inputValue: string;
   focusedIndex: number | null;
 }
 
@@ -26,10 +37,37 @@ type ChatAction =
   | { type: 'ADD_USER_MESSAGE'; payload: ChatMessage }
   | { type: 'START_GENERATION'; payload: { responseId: string } }
   | { type: 'STREAM_TOKEN'; payload: { messageId: string; token: string } }
+  | { type: 'THINKING_DELTA'; payload: { messageId: string; text: string } }
+  | {
+      type: 'TOOL_CALL_START';
+      payload: {
+        messageId: string;
+        toolCallId: string;
+        title: string;
+        status: ToolCallPart['status'];
+        kind?: string;
+        rawInput?: unknown;
+        locations?: ToolCallPart['locations'];
+      };
+    }
+  | {
+      type: 'TOOL_CALL_UPDATE';
+      payload: {
+        messageId: string;
+        toolCallId: string;
+        title?: string;
+        status?: ToolCallPart['status'];
+        kind?: string;
+        rawInput?: unknown;
+        rawOutput?: unknown;
+        contentPreview?: readonly string[];
+        locations?: ToolCallPart['locations'];
+      };
+    }
   | { type: 'COMPLETE_GENERATION'; payload: { messageId: string } }
+  | { type: 'ERROR_GENERATION'; payload: { messageId: string; error: string } }
   | { type: 'CANCEL_GENERATION'; payload: { messageId: string } }
   | { type: 'SET_MESSAGES'; payload: ChatMessage[] }
-  | { type: 'SET_INPUT'; payload: string }
   | { type: 'SET_FOCUSED_INDEX'; payload: number | null }
   | { type: 'ADD_ERROR_MESSAGE'; payload: { id: string; content: string } }
   | { type: 'ADD_HISTORY_MESSAGE'; payload: ChatMessage }
@@ -39,13 +77,152 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function appendTextPart(
+  parts: readonly ChatContentPart[] | undefined,
+  token: string
+): ChatContentPart[] {
+  const nextParts = [...(parts ?? [])];
+  const lastPart = nextParts[nextParts.length - 1];
+
+  if (lastPart?.type === 'text') {
+    nextParts[nextParts.length - 1] = {
+      ...lastPart,
+      text: lastPart.text + token,
+      streaming: true,
+    };
+    return nextParts;
+  }
+
+  if (lastPart?.type === 'thinking') {
+    nextParts[nextParts.length - 1] = {
+      ...lastPart,
+      streaming: false,
+    };
+  }
+
+  nextParts.push({
+    type: 'text',
+    text: token,
+    streaming: true,
+  });
+  return nextParts;
+}
+
+function appendThinkingPart(
+  parts: readonly ChatContentPart[] | undefined,
+  text: string
+): ChatContentPart[] {
+  const nextParts = [...(parts ?? [])];
+  const lastPart = nextParts[nextParts.length - 1];
+
+  if (lastPart?.type === 'thinking') {
+    nextParts[nextParts.length - 1] = {
+      ...lastPart,
+      text: lastPart.text + text,
+      streaming: true,
+    };
+    return nextParts;
+  }
+
+  if (lastPart?.type === 'text') {
+    nextParts[nextParts.length - 1] = {
+      ...lastPart,
+      streaming: false,
+    };
+  }
+
+  nextParts.push({
+    type: 'thinking',
+    text,
+    streaming: true,
+  });
+  return nextParts;
+}
+
+function upsertToolCallPart(
+  parts: readonly ChatContentPart[] | undefined,
+  toolCall: {
+    id: string;
+    title?: string;
+    status?: ToolCallPart['status'];
+    kind?: string;
+    rawInput?: unknown;
+    rawOutput?: unknown;
+    contentPreview?: readonly string[];
+    locations?: ToolCallPart['locations'];
+  }
+): ChatContentPart[] {
+  const nextParts = [...(parts ?? [])];
+  const lastPart = nextParts[nextParts.length - 1];
+  const existingIndex = nextParts.findIndex(
+    part => part.type === 'tool_call' && part.id === toolCall.id
+  );
+
+  if (existingIndex >= 0) {
+    const existing = nextParts[existingIndex] as ToolCallPart;
+    nextParts[existingIndex] = {
+      ...existing,
+      title: toolCall.title ?? existing.title,
+      status: toolCall.status ?? existing.status,
+      kind: toolCall.kind ?? existing.kind,
+      rawInput: toolCall.rawInput ?? existing.rawInput,
+      rawOutput: toolCall.rawOutput ?? existing.rawOutput,
+      contentPreview: toolCall.contentPreview ?? existing.contentPreview,
+      locations: toolCall.locations ?? existing.locations,
+    };
+    return nextParts;
+  }
+
+  if (lastPart?.type === 'text' || lastPart?.type === 'thinking') {
+    nextParts[nextParts.length - 1] = {
+      ...lastPart,
+      streaming: false,
+    };
+  }
+
+  nextParts.push({
+    type: 'tool_call',
+    id: toolCall.id,
+    title: toolCall.title ?? 'Tool call',
+    status: toolCall.status ?? 'pending',
+    kind: toolCall.kind,
+    rawInput: toolCall.rawInput,
+    rawOutput: toolCall.rawOutput,
+    contentPreview: toolCall.contentPreview,
+    locations: toolCall.locations,
+  });
+  return nextParts;
+}
+
+function finalizeStreamingParts(
+  parts: readonly ChatContentPart[] | undefined
+): ChatContentPart[] | undefined {
+  if (!parts) return parts;
+  return parts.map(part => {
+    if (part.type === 'text') {
+      return { ...part, streaming: false };
+    }
+    if (part.type === 'thinking') {
+      return { ...part, streaming: false };
+    }
+    return part;
+  });
+}
+
+function flattenAssistantText(parts: readonly ChatContentPart[] | undefined): string {
+  if (!parts) return '';
+  return parts
+    .filter((part): part is Extract<ChatContentPart, { type: 'text' }> => part.type === 'text')
+    .map(part => part.text)
+    .join('');
+}
+
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'ADD_USER_MESSAGE':
       return {
         ...state,
         messages: [...state.messages, action.payload],
-        inputValue: '',
       };
 
     case 'START_GENERATION': {
@@ -53,6 +230,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         id: action.payload.responseId,
         role: MessageRole.ASSISTANT,
         content: '',
+        contentParts: [],
         timestamp: new Date(),
         status: MessageStatus.STREAMING,
       };
@@ -67,9 +245,68 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'STREAM_TOKEN':
       return {
         ...state,
+        messages: state.messages.map(msg => {
+          if (msg.id !== action.payload.messageId) return msg;
+          const contentParts = appendTextPart(msg.contentParts, action.payload.token);
+          return {
+            ...msg,
+            contentParts,
+            content: flattenAssistantText(contentParts),
+          };
+        }),
+      };
+
+    case 'THINKING_DELTA':
+      return {
+        ...state,
         messages: state.messages.map(msg =>
           msg.id === action.payload.messageId
-            ? { ...msg, content: msg.content + action.payload.token }
+            ? {
+                ...msg,
+                contentParts: appendThinkingPart(msg.contentParts, action.payload.text),
+              }
+            : msg
+        ),
+      };
+
+    case 'TOOL_CALL_START':
+      return {
+        ...state,
+        messages: state.messages.map(msg =>
+          msg.id === action.payload.messageId
+            ? {
+                ...msg,
+                contentParts: upsertToolCallPart(msg.contentParts, {
+                  id: action.payload.toolCallId,
+                  title: action.payload.title,
+                  status: action.payload.status,
+                  kind: action.payload.kind,
+                  rawInput: action.payload.rawInput,
+                  locations: action.payload.locations,
+                }),
+              }
+            : msg
+        ),
+      };
+
+    case 'TOOL_CALL_UPDATE':
+      return {
+        ...state,
+        messages: state.messages.map(msg =>
+          msg.id === action.payload.messageId
+            ? {
+                ...msg,
+                contentParts: upsertToolCallPart(msg.contentParts, {
+                  id: action.payload.toolCallId,
+                  title: action.payload.title,
+                  status: action.payload.status,
+                  kind: action.payload.kind,
+                  rawInput: action.payload.rawInput,
+                  rawOutput: action.payload.rawOutput,
+                  contentPreview: action.payload.contentPreview,
+                  locations: action.payload.locations,
+                }),
+              }
             : msg
         ),
       };
@@ -78,7 +315,29 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         messages: state.messages.map(msg =>
-          msg.id === action.payload.messageId ? { ...msg, status: MessageStatus.COMPLETE } : msg
+          msg.id === action.payload.messageId
+            ? {
+                ...msg,
+                status: MessageStatus.COMPLETE,
+                contentParts: finalizeStreamingParts(msg.contentParts),
+              }
+            : msg
+        ),
+        isGenerating: false,
+        currentResponseId: null,
+      };
+
+    case 'ERROR_GENERATION':
+      return {
+        ...state,
+        messages: state.messages.map(msg =>
+          msg.id === action.payload.messageId
+            ? {
+                ...msg,
+                status: MessageStatus.ERROR,
+                errorDetails: action.payload.error,
+              }
+            : msg
         ),
         isGenerating: false,
         currentResponseId: null,
@@ -88,7 +347,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         messages: state.messages.map(msg =>
-          msg.id === action.payload.messageId ? { ...msg, status: MessageStatus.CANCELLED } : msg
+          msg.id === action.payload.messageId
+            ? {
+                ...msg,
+                status: MessageStatus.CANCELLED,
+                contentParts: finalizeStreamingParts(msg.contentParts),
+              }
+            : msg
         ),
         isGenerating: false,
         currentResponseId: null,
@@ -98,12 +363,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         messages: action.payload,
-      };
-
-    case 'SET_INPUT':
-      return {
-        ...state,
-        inputValue: action.payload,
       };
 
     case 'SET_FOCUSED_INDEX':
@@ -147,18 +406,11 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   }
 }
 
-interface PersistedState {
-  inputDraft: string;
-}
-
 function getInitialState(): ChatState {
-  const persisted = getState<PersistedState>();
-
   return {
     messages: [],
     isGenerating: false,
     currentResponseId: null,
-    inputValue: persisted?.inputDraft ?? '',
     focusedIndex: null,
   };
 }
@@ -166,9 +418,7 @@ function getInitialState(): ChatState {
 export interface UseChatReturn {
   messages: readonly ChatMessage[];
   isGenerating: boolean;
-  inputValue: string;
-  setInputValue: (value: string) => void;
-  sendMessage: (chips?: readonly ContextChip[]) => void;
+  sendMessage: (content: string, chips?: readonly ContextChip[]) => void;
   stopGeneration: () => void;
   focusedIndex: number | null;
   setFocusedIndex: (index: number | null) => void;
@@ -177,12 +427,6 @@ export interface UseChatReturn {
 
 export function useChat(): UseChatReturn {
   const [state, dispatch] = useReducer(chatReducer, null, getInitialState);
-  const inputValueRef = useRef(state.inputValue);
-
-  useEffect(() => {
-    inputValueRef.current = state.inputValue;
-    setState<PersistedState>({ inputDraft: state.inputValue });
-  }, [state.inputValue]);
 
   useEffect(() => {
     const unsubscribe = onMessage(message => {
@@ -194,10 +438,54 @@ export function useChat(): UseChatReturn {
             token: message.payload.token,
           },
         });
+      } else if (isThinkingDeltaMessage(message)) {
+        dispatch({
+          type: 'THINKING_DELTA',
+          payload: {
+            messageId: message.payload.messageId,
+            text: message.payload.text,
+          },
+        });
+      } else if (isToolCallStartMessage(message)) {
+        dispatch({
+          type: 'TOOL_CALL_START',
+          payload: {
+            messageId: message.payload.messageId,
+            toolCallId: message.payload.toolCallId,
+            title: message.payload.title,
+            status: message.payload.status,
+            kind: message.payload.kind,
+            rawInput: message.payload.rawInput,
+            locations: message.payload.locations,
+          },
+        });
+      } else if (isToolCallUpdateMessage(message)) {
+        dispatch({
+          type: 'TOOL_CALL_UPDATE',
+          payload: {
+            messageId: message.payload.messageId,
+            toolCallId: message.payload.toolCallId,
+            title: message.payload.title,
+            status: message.payload.status,
+            kind: message.payload.kind,
+            rawInput: message.payload.rawInput,
+            rawOutput: message.payload.rawOutput,
+            contentPreview: message.payload.contentPreview,
+            locations: message.payload.locations,
+          },
+        });
       } else if (isGenerationCompleteMessage(message)) {
         dispatch({
           type: 'COMPLETE_GENERATION',
           payload: { messageId: message.payload.messageId },
+        });
+      } else if (isGenerationErrorMessage(message)) {
+        dispatch({
+          type: 'ERROR_GENERATION',
+          payload: {
+            messageId: message.payload.messageId,
+            error: message.payload.error,
+          },
         });
       } else if (isGenerationCancelledMessage(message)) {
         dispatch({
@@ -210,7 +498,6 @@ export function useChat(): UseChatReturn {
           payload: message.payload.messages as ChatMessage[],
         });
       } else if (isHistoryMessage(message)) {
-        // Convert timestamp from string (JSON serialized) back to Date
         const msg = message.payload.message;
         dispatch({
           type: 'ADD_HISTORY_MESSAGE',
@@ -227,18 +514,13 @@ export function useChat(): UseChatReturn {
     return unsubscribe;
   }, []);
 
-  const setInputValue = useCallback((value: string) => {
-    dispatch({ type: 'SET_INPUT', payload: value });
-  }, []);
-
-  const sendMessage = useCallback((chips?: readonly ContextChip[]) => {
-    const content = inputValueRef.current.trim();
-    if (!content && (!chips || chips.length === 0)) return;
+  const sendMessage = useCallback((content: string, chips?: readonly ContextChip[]) => {
+    const trimmedContent = content.trim();
+    if (!trimmedContent && (!chips || chips.length === 0)) return;
 
     const userMessageId = generateId();
     const responseId = generateId();
 
-    // Convert chips to context for display in message
     const context: MessageContext[] | undefined = chips?.map(chip => ({
       filePath: chip.filePath,
       fileName: chip.fileName,
@@ -248,7 +530,7 @@ export function useChat(): UseChatReturn {
     const userMessage: ChatMessage = {
       id: userMessageId,
       role: MessageRole.USER,
-      content: content || '(context only)',
+      content: trimmedContent || '(context only)',
       timestamp: new Date(),
       status: MessageStatus.COMPLETE,
       context: context && context.length > 0 ? context : undefined,
@@ -257,13 +539,12 @@ export function useChat(): UseChatReturn {
     dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
     dispatch({ type: 'START_GENERATION', payload: { responseId } });
 
-    // Convert ContextChip to ContextChipData (only what extension needs)
     const chipData: ContextChipData[] | undefined = chips?.map(chip => ({
       filePath: chip.filePath,
       range: chip.range,
     }));
 
-    postMessage(createSendMessageMessage(content, userMessageId, responseId, chipData));
+    postMessage(createSendMessageMessage(trimmedContent, userMessageId, responseId, chipData));
   }, []);
 
   const stopGeneration = useCallback(() => {
@@ -297,8 +578,6 @@ export function useChat(): UseChatReturn {
   return {
     messages: state.messages,
     isGenerating: state.isGenerating,
-    inputValue: state.inputValue,
-    setInputValue,
     sendMessage,
     stopGeneration,
     focusedIndex: state.focusedIndex,

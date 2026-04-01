@@ -1,18 +1,19 @@
-import { useState } from 'react';
 import { parseContent } from '../../../shared/fileReferenceParser';
-import { MessageStatus } from '../../../shared/types';
+import { ChatContentPart, MessageStatus } from '../../../shared/types';
 import { CopyButton } from '../markdown/CopyButton';
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer';
 import { FileReferenceCard } from './FileReferenceCard';
 import { ProgressIndicator } from './ProgressIndicator';
-
-const MAX_LINES_COLLAPSED = 15;
+import { ThinkingBlock } from './ThinkingBlock';
+import { ToolCallCard } from './ToolCallCard';
 
 interface AssistantMessageProps {
   content: string;
+  contentParts?: readonly ChatContentPart[];
   timestamp?: Date;
   status: MessageStatus;
   isStreaming: boolean;
+  errorDetails?: string;
 }
 
 function formatTime(date?: Date): string {
@@ -20,89 +21,131 @@ function formatTime(date?: Date): string {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function truncateContent(
-  content: string,
-  maxLines: number
-): { truncated: string; isTruncated: boolean; totalLines: number } {
-  const lines = content.split('\n');
-  if (lines.length <= maxLines) {
-    return { truncated: content, isTruncated: false, totalLines: lines.length };
-  }
-  return {
-    truncated: lines.slice(0, maxLines).join('\n') + '\n...',
-    isTruncated: true,
-    totalLines: lines.length,
-  };
+function getCopyText(content: string, contentParts?: readonly ChatContentPart[]): string {
+  if (!contentParts || contentParts.length === 0) return content;
+  return contentParts
+    .map(part => {
+      if (part.type === 'text') return part.text;
+      return '';
+    })
+    .join('');
 }
 
 export function AssistantMessage({
   content,
+  contentParts,
   timestamp,
   status,
   isStreaming,
+  errorDetails,
 }: AssistantMessageProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const showIndicator = isStreaming && !content;
+  const hasStructuredParts = Boolean(contentParts && contentParts.length > 0);
+  const showIndicator = isStreaming && !hasStructuredParts && !content;
 
-  // Parse content to check if it's a file reference
-  // Only parse when not streaming to avoid partial matches
-  const parsedContent = !isStreaming ? parseContent(content) : { type: 'text' as const, content };
+  // Only parse plain assistant content when we're not rendering structured parts.
+  const parsedContent =
+    !isStreaming && !hasStructuredParts
+      ? parseContent(content)
+      : ({ type: 'text', content } as const);
   const isFileReference = parsedContent.type === 'file_reference';
 
-  // Only truncate history messages (no timestamp) that aren't streaming and aren't file references
-  const isHistoryMessage = !timestamp;
-  const { truncated, isTruncated, totalLines } = truncateContent(content, MAX_LINES_COLLAPSED);
-  const displayContent =
-    isHistoryMessage && isTruncated && !isExpanded && !isStreaming && !isFileReference
-      ? truncated
-      : content;
-
-  // Get copy text - for file references, use the file content if available
-  const copyText =
-    isFileReference && parsedContent.type === 'file_reference'
+  const copyText = hasStructuredParts
+    ? getCopyText(content, contentParts)
+    : isFileReference && parsedContent.type === 'file_reference'
       ? parsedContent.reference.content || content
       : content;
+  const renderInlineTimestamp = !showIndicator && (!isFileReference || hasStructuredParts);
+  const hasErrorDetails = status === MessageStatus.ERROR && !!errorDetails;
 
   return (
-    <div className="flex flex-col items-start group">
+    <div className="group flex flex-col items-start">
       <div className="w-full">
         <div className="relative">
           {showIndicator ? (
             <ProgressIndicator className="py-2" />
+          ) : hasStructuredParts ? (
+            <div className="flex flex-col gap-2 rounded-xl px-3 pt-2 pb-6">
+              {contentParts.map((part, index) => {
+                if (part.type === 'text') {
+                  return (
+                    <div key={`${part.type}-${index}`} className="w-full">
+                      <MarkdownRenderer content={part.text} isStreaming={Boolean(part.streaming)} />
+                    </div>
+                  );
+                }
+
+                if (part.type === 'thinking') {
+                  return <ThinkingBlock key={`${part.type}-${index}`} part={part} />;
+                }
+
+                if (part.type === 'tool_call') {
+                  return <ToolCallCard key={part.id} part={part} />;
+                }
+
+                return null;
+              })}
+            </div>
           ) : isFileReference && parsedContent.type === 'file_reference' ? (
             <FileReferenceCard reference={parsedContent.reference} />
           ) : (
-            <>
-              <MarkdownRenderer content={displayContent} isStreaming={isStreaming} />
-              {isHistoryMessage && isTruncated && !isStreaming && (
-                <button
-                  type="button"
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="mt-2 text-xs text-[var(--vscode-textLink-foreground)] hover:underline"
-                >
-                  {isExpanded ? 'Show less' : `Show more (${totalLines} lines)`}
-                </button>
+            <div className="w-full rounded-xl px-3 pt-2 pb-6">
+              <MarkdownRenderer content={content} isStreaming={isStreaming} />
+              {hasErrorDetails && (
+                <details className="mt-3 rounded-lg border border-[var(--vscode-inputValidation-errorBorder,var(--vscode-errorForeground))] bg-[var(--vscode-inputValidation-errorBackground,rgba(255,0,0,0.08))] px-3 py-2">
+                  <summary className="cursor-pointer text-sm text-[var(--vscode-errorForeground)]">
+                    Error details
+                  </summary>
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-[var(--vscode-errorForeground)]">
+                    {errorDetails}
+                  </pre>
+                </details>
               )}
-            </>
+            </div>
           )}
-          {!isStreaming && content && (
-            <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
+
+          {renderInlineTimestamp && (
+            <div className="absolute inset-x-0 bottom-0 flex h-6 items-center gap-2 pl-3">
+              <p
+                className={`text-[11px] text-[var(--vscode-descriptionForeground)] ${!timestamp ? 'italic' : ''}`}
+              >
+                {formatTime(timestamp)}
+              </p>
+              {status === MessageStatus.CANCELLED && (
+                <span className="text-[11px] text-[var(--vscode-descriptionForeground)] italic">
+                  (cancelled)
+                </span>
+              )}
+              {status === MessageStatus.ERROR && (
+                <span className="text-[11px] text-[var(--vscode-errorForeground)] italic">
+                  (error)
+                </span>
+              )}
+            </div>
+          )}
+
+          {!isStreaming && copyText && (
+            <div className="absolute -top-3 right-2 opacity-0 transition-opacity group-hover:opacity-100">
               <CopyButton text={copyText} />
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 mt-1">
-          <p
-            className={`text-xs text-[var(--vscode-descriptionForeground)] ${!timestamp ? 'italic' : ''}`}
-          >
-            {formatTime(timestamp)}
-          </p>
-          {status === MessageStatus.CANCELLED && (
-            <span className="text-xs text-[var(--vscode-descriptionForeground)] italic">
-              (cancelled)
-            </span>
-          )}
-        </div>
+        {!renderInlineTimestamp && (
+          <div className="mt-1 flex items-center gap-2">
+            <p
+              className={`text-xs text-[var(--vscode-descriptionForeground)] ${!timestamp ? 'italic' : ''}`}
+            >
+              {formatTime(timestamp)}
+            </p>
+            {status === MessageStatus.CANCELLED && (
+              <span className="text-xs text-[var(--vscode-descriptionForeground)] italic">
+                (cancelled)
+              </span>
+            )}
+            {status === MessageStatus.ERROR && (
+              <span className="text-xs text-[var(--vscode-errorForeground)] italic">(error)</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

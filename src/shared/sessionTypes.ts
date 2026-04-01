@@ -8,25 +8,55 @@ export interface SessionEntry {
   readonly sessionId: string;
   readonly title: string;
   readonly cwd: string;
-  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly createdAt?: string;
 }
 
 /** Session storage schema */
 export interface SessionStorageData {
   readonly schemaVersion: 1;
   readonly activeSessionId: string | null;
-  readonly sessions: readonly SessionEntry[];
 }
 
 /** Agent capabilities from ACP initialize response */
 export interface AgentCapabilities {
   readonly loadSession: boolean;
+  readonly listSessions: boolean;
   readonly promptCapabilities: {
     readonly image: boolean;
     readonly audio: boolean;
     readonly embeddedContext: boolean;
   };
 }
+
+/** Option value for a session setting selector. */
+export interface SessionSettingOption {
+  readonly value: string;
+  readonly name: string;
+  readonly description?: string;
+}
+
+/** Select-style session setting exposed by the ACP agent. */
+export interface SessionSelectSetting {
+  readonly id: string;
+  readonly label: string;
+  readonly category: 'mode' | 'model' | 'other';
+  readonly currentValue: string;
+  readonly options: readonly SessionSettingOption[];
+  readonly description?: string;
+}
+
+/** Session settings state surfaced to the webview for the active session. */
+export interface SessionSettingsState {
+  readonly mode: SessionSelectSetting | null;
+  readonly model: SessionSelectSetting | null;
+}
+
+/** Empty session settings state. */
+export const EMPTY_SESSION_SETTINGS: SessionSettingsState = {
+  mode: null,
+  model: null,
+};
 
 /** Session list grouped by date for UI */
 export interface GroupedSessions {
@@ -37,6 +67,7 @@ export interface GroupedSessions {
 /** Default capabilities - loadSession enabled for modern goose versions */
 export const DEFAULT_CAPABILITIES: AgentCapabilities = {
   loadSession: true,
+  listSessions: false,
   promptCapabilities: {
     image: false,
     audio: false,
@@ -67,7 +98,7 @@ export function groupSessionsByDate(sessions: readonly SessionEntry[]): GroupedS
   const groups = new Map<string, SessionEntry[]>();
 
   for (const session of sessions) {
-    const sessionDate = new Date(session.createdAt);
+    const sessionDate = new Date(getSessionTimestamp(session));
     const sessionDay = new Date(
       sessionDate.getFullYear(),
       sessionDate.getMonth(),
@@ -106,14 +137,15 @@ export function groupSessionsByDate(sessions: readonly SessionEntry[]): GroupedS
   return sortedEntries.map(([label, groupSessions]) => ({
     label,
     sessions: [...groupSessions].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      (a, b) =>
+        new Date(getSessionTimestamp(b)).getTime() - new Date(getSessionTimestamp(a)).getTime()
     ),
   }));
 }
 
 /** Format a timestamp for display */
-export function formatSessionTime(createdAt: string): string {
-  const date = new Date(createdAt);
+export function formatSessionTime(timestamp: string): string {
+  const date = new Date(timestamp);
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -121,12 +153,20 @@ export function formatSessionTime(createdAt: string): string {
   });
 }
 
+/** Resolve the best available timestamp for session ordering/display */
+export function getSessionTimestamp(
+  session: Pick<SessionEntry, 'updatedAt' | 'createdAt'>
+): string {
+  return session.updatedAt || session.createdAt || new Date(0).toISOString();
+}
+
 /** Truncate a path for display */
 export function truncatePath(path: string, maxLength: number = 30): string {
   if (path.length <= maxLength) return path;
 
-  const parts = path.split('/').filter(Boolean);
-  if (parts.length <= 2) return '.../' + parts.join('/');
+  const separator = path.includes('\\') && !path.includes('/') ? '\\' : '/';
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+  if (parts.length <= 2) return `...${separator}${parts.join(separator)}`;
 
-  return '.../' + parts.slice(-2).join('/');
+  return `...${separator}${parts.slice(-2).join(separator)}`;
 }

@@ -123,6 +123,39 @@ export enum MessageStatus {
   ERROR = 'error',
 }
 
+/** File location referenced by a tool call */
+export interface ToolCallLocation {
+  readonly path: string;
+  readonly line?: number | null;
+}
+
+/** Structured assistant content parts */
+export type ChatContentPart = TextPart | ThinkingPart | ToolCallPart;
+
+export interface TextPart {
+  readonly type: 'text';
+  readonly text: string;
+  readonly streaming?: boolean;
+}
+
+export interface ThinkingPart {
+  readonly type: 'thinking';
+  readonly text: string;
+  readonly streaming: boolean;
+}
+
+export interface ToolCallPart {
+  readonly type: 'tool_call';
+  readonly id: string;
+  readonly title: string;
+  readonly status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  readonly kind?: string;
+  readonly rawInput?: unknown;
+  readonly rawOutput?: unknown;
+  readonly contentPreview?: readonly string[];
+  readonly locations?: readonly ToolCallLocation[];
+}
+
 /** Attached context reference in a message (used for both input and history) */
 export interface MessageContext {
   readonly filePath: string;
@@ -142,7 +175,9 @@ export interface ChatMessage {
   readonly timestamp?: Date; // Optional - undefined for history messages loaded from server
   readonly status: MessageStatus;
   readonly originalContent?: string;
+  readonly errorDetails?: string;
   readonly context?: readonly MessageContext[]; // Attached file/resource references
+  readonly contentParts?: readonly ChatContentPart[];
 }
 
 /** Chat UI state */

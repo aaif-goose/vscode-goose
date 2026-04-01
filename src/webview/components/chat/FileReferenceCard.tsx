@@ -30,13 +30,15 @@ export function FileReferenceCard({ reference }: FileReferenceCardProps) {
         type="button"
         onClick={() => hasContent && setIsExpanded(!isExpanded)}
         className={`
-          inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
-          bg-[var(--vscode-badge-background)]
-          text-[var(--vscode-badge-foreground)]
-          text-sm text-left
+          inline-flex max-w-full items-center gap-2 rounded-xl
+          border border-[var(--vscode-panel-border)]
+          bg-[var(--vscode-editor-background)]
+          px-3 py-2
+          text-left text-sm
+          text-[var(--vscode-foreground)]
           max-w-full
           transition-colors
-          ${hasContent ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}
+          ${hasContent ? 'cursor-pointer hover:bg-[var(--vscode-list-hoverBackground)]' : 'cursor-default'}
         `}
         title={filePath}
         aria-expanded={isExpanded}
@@ -49,14 +51,16 @@ export function FileReferenceCard({ reference }: FileReferenceCardProps) {
         <span className="font-medium truncate">
           {fileName}
           {reference.lineRange && (
-            <span className="opacity-70">
+            <span className="text-[var(--vscode-descriptionForeground)]">
               :{reference.lineRange.startLine}-{reference.lineRange.endLine}
             </span>
           )}
         </span>
         {/* Show directory path only when collapsed */}
         {!isExpanded && (
-          <span className="text-xs opacity-70 truncate min-w-0">{getDirectoryPath(filePath)}</span>
+          <span className="min-w-0 truncate text-xs text-[var(--vscode-descriptionForeground)]">
+            {getDirectoryPath(filePath)}
+          </span>
         )}
       </button>
 

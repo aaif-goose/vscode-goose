@@ -176,6 +176,31 @@ describe('createJsonRpcClient', () => {
       }
     });
 
+    test('supports disabling timeout for a single request', async () => {
+      const shortTimeoutConfig: JsonRpcClientConfig = {
+        stdin: mockStreams.stdin,
+        stdout: mockStreams.stdout,
+        logger,
+        timeoutMs: 50,
+      };
+      const shortTimeoutClient = createJsonRpcClient(shortTimeoutConfig);
+
+      const requestPromise = shortTimeoutClient.request<string>('slow.but.streaming', undefined, {
+        timeoutMs: null,
+      })();
+
+      await new Promise(resolve => setTimeout(resolve, 75));
+
+      mockStreams.pushResponse(JSON.stringify({ jsonrpc: '2.0', id: 1, result: 'ok' }));
+
+      const result = await requestPromise;
+
+      expect(E.isRight(result)).toBe(true);
+      if (E.isRight(result)) {
+        expect(result.right).toBe('ok');
+      }
+    });
+
     test('matches responses to correct pending requests', async () => {
       const request1 = client.request<string>('method1');
       const request2 = client.request<string>('method2');

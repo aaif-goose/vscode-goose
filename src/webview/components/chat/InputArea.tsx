@@ -1,20 +1,21 @@
-import { KeyboardEvent, useCallback, useEffect, useRef } from 'react';
+import { KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import type { ContextChip, FileSearchResult } from '../../../shared/contextTypes';
 import { isFocusChatInputMessage } from '../../../shared/messages';
-import { onMessage } from '../../bridge';
+import { SessionSettingsState } from '../../../shared/sessionTypes';
+import { getState, onMessage, setState } from '../../bridge';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import { FilePicker } from '../picker/FilePicker';
 import { ChipStack } from './ChipStack';
 import { SendButton } from './SendButton';
+import { SessionSettingsBar } from './SessionSettingsBar';
 import { StopButton } from './StopButton';
 
 interface InputAreaProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: (chips?: readonly ContextChip[]) => void;
+  onSend: (content: string, chips?: readonly ContextChip[]) => void;
   onStop: () => void;
   isGenerating: boolean;
   disabled: boolean;
+  activeSessionId?: string | null;
   chips?: readonly ContextChip[];
   onRemoveChip?: (chipId: string) => void;
   chipFocusedIndex?: number | null;
@@ -22,19 +23,61 @@ interface InputAreaProps {
   onClearChips?: () => void;
   onAddFileChip?: (result: FileSearchResult) => void;
   chipAnnouncement?: string | null;
+  settings: SessionSettingsState;
+  onModeChange: (modeId: string) => void;
+  onModelChange: (modelId: string) => void;
 }
 
 const MAX_HEIGHT = 200;
+const DRAFT_PERSIST_DEBOUNCE_MS = 150;
 const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
 const PLACEHOLDER = `Message Goose... (${isMac ? '⌘' : 'Ctrl'}+↑/↓ to navigate)`;
 
+interface PersistedState {
+  inputDraft?: string;
+  inputDraftsBySession?: Record<string, string>;
+  unsessionedDraft?: string;
+}
+
+function getDraftForSession(state: PersistedState | undefined, sessionId?: string | null): string {
+  if (!state) return '';
+
+  if (sessionId) {
+    return state.inputDraftsBySession?.[sessionId] ?? '';
+  }
+
+  return state.unsessionedDraft ?? state.inputDraft ?? '';
+}
+
+function setDraftForSession(
+  state: PersistedState | undefined,
+  sessionId: string | null | undefined,
+  draft: string
+): PersistedState {
+  const nextState: PersistedState = {
+    inputDraftsBySession: { ...(state?.inputDraftsBySession ?? {}) },
+    unsessionedDraft: state?.unsessionedDraft ?? '',
+  };
+
+  if (sessionId) {
+    if (draft) {
+      nextState.inputDraftsBySession![sessionId] = draft;
+    } else {
+      delete nextState.inputDraftsBySession![sessionId];
+    }
+  } else {
+    nextState.unsessionedDraft = draft;
+  }
+
+  return nextState;
+}
+
 export function InputArea({
-  value,
-  onChange,
   onSend,
   onStop,
   isGenerating,
   disabled,
+  activeSessionId = null,
   chips = [],
   onRemoveChip,
   chipFocusedIndex = null,
@@ -42,23 +85,76 @@ export function InputArea({
   onClearChips,
   onAddFileChip,
   chipAnnouncement = null,
+  settings,
+  onModeChange,
+  onModelChange,
 }: InputAreaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const draftPersistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [value, setValue] = useState(() =>
+    getDraftForSession(getState<PersistedState>(), activeSessionId)
+  );
+  const latestValueRef = useRef(value);
+  const sessionIdRef = useRef<string | null>(activeSessionId);
 
   // Initialize file picker hook
   // biome-ignore lint/suspicious/noEmptyBlockStatements: intentional noop
   const noopAddChip = useCallback(() => {}, []);
-  const filePicker = useFilePicker(onAddFileChip ?? noopAddChip, textareaRef, onChange);
+  const filePicker = useFilePicker(onAddFileChip ?? noopAddChip, textareaRef, setValue);
+
+  useEffect(() => {
+    latestValueRef.current = value;
+  }, [value]);
+
+  const persistDraft = useCallback((sessionId: string | null, draft: string) => {
+    const persistedState = getState<PersistedState>();
+    setState<PersistedState>(setDraftForSession(persistedState, sessionId, draft));
+  }, []);
+
+  useEffect(() => {
+    if (sessionIdRef.current !== activeSessionId) {
+      persistDraft(sessionIdRef.current, latestValueRef.current);
+      sessionIdRef.current = activeSessionId;
+      setValue(getDraftForSession(getState<PersistedState>(), activeSessionId));
+    }
+  }, [activeSessionId, persistDraft]);
+
+  useEffect(() => {
+    if (draftPersistTimeoutRef.current) {
+      clearTimeout(draftPersistTimeoutRef.current);
+    }
+
+    draftPersistTimeoutRef.current = setTimeout(() => {
+      persistDraft(sessionIdRef.current, value);
+    }, DRAFT_PERSIST_DEBOUNCE_MS);
+
+    return () => {
+      if (draftPersistTimeoutRef.current) {
+        clearTimeout(draftPersistTimeoutRef.current);
+      }
+    };
+  }, [value, persistDraft]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: value triggers textarea resize
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
+    const previousHeight = textarea.style.height;
     textarea.style.height = 'auto';
-    const newHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
-    textarea.style.height = `${newHeight}px`;
+    const nextHeight = Math.min(textarea.scrollHeight, MAX_HEIGHT);
+    const nextHeightPx = `${nextHeight}px`;
+    if (previousHeight !== nextHeightPx) {
+      textarea.style.height = nextHeightPx;
+    } else {
+      textarea.style.height = previousHeight;
+    }
+
+    const nextOverflow = textarea.scrollHeight > MAX_HEIGHT ? 'auto' : 'hidden';
+    if (textarea.style.overflowY !== nextOverflow) {
+      textarea.style.overflowY = nextOverflow;
+    }
   }, [value]);
 
   // Click outside handler to close file picker
@@ -95,10 +191,11 @@ export function InputArea({
     if (!userInput && !hasChips) return;
 
     // Pass chips to onSend - extension will handle formatting
-    onSend(hasChips ? chips : undefined);
-    onChange('');
+    onSend(userInput, hasChips ? chips : undefined);
+    setValue('');
+    persistDraft(sessionIdRef.current, '');
     onClearChips?.();
-  }, [value, disabled, isGenerating, chips, onChange, onSend, onClearChips]);
+  }, [value, disabled, isGenerating, chips, onSend, onClearChips, persistDraft]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Pass keyboard events to file picker first
@@ -167,10 +264,10 @@ export function InputArea({
       const newValue = e.target.value;
       const cursorPosition = e.target.selectionStart ?? 0;
 
-      onChange(newValue);
+      setValue(newValue);
       filePicker.handleInput(newValue, cursorPosition);
     },
-    [onChange, filePicker]
+    [filePicker]
   );
 
   // File picker navigation handlers
@@ -187,7 +284,7 @@ export function InputArea({
   );
 
   return (
-    <div className="shrink-0 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] p-4">
+    <div className="shrink-0 border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] px-3 py-2.5">
       {/* Render ChipStack above the input area when chips exist, or show announcements */}
       {(chips.length > 0 || chipAnnouncement) && onRemoveChip && onChipFocusChange && (
         <ChipStack
@@ -198,8 +295,8 @@ export function InputArea({
           announcement={chipAnnouncement}
         />
       )}
-      <div className="flex items-start gap-2">
-        <div ref={containerRef} className="flex-1 relative">
+      <div className="rounded-2xl border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+        <div ref={containerRef} className="relative">
           {/* File picker dropdown */}
           <FilePicker
             isOpen={filePicker.isOpen}
@@ -218,16 +315,28 @@ export function InputArea({
             placeholder={PLACEHOLDER}
             disabled={disabled}
             rows={1}
-            className="w-full resize-none bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] border border-[var(--vscode-input-border)] rounded-lg px-3 py-2 focus:outline-none focus:border-[var(--vscode-focusBorder)] placeholder:text-[var(--vscode-input-placeholderForeground)]"
+            className="min-h-[36px] w-full resize-none border-0 bg-transparent px-1 py-0.5 text-[var(--vscode-input-foreground)] focus:outline-none placeholder:text-[var(--vscode-input-placeholderForeground)]"
             style={{ maxHeight: `${MAX_HEIGHT}px` }}
             aria-label="Message input"
           />
         </div>
-        {isGenerating ? (
-          <StopButton onClick={onStop} />
-        ) : (
-          <SendButton onClick={handleSend} disabled={!canSend} />
-        )}
+        <div className="mt-2 flex flex-nowrap items-end justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <SessionSettingsBar
+              settings={settings}
+              disabled={disabled || isGenerating}
+              onModeChange={onModeChange}
+              onModelChange={onModelChange}
+            />
+          </div>
+          <div className="shrink-0">
+            {isGenerating ? (
+              <StopButton onClick={onStop} />
+            ) : (
+              <SendButton onClick={handleSend} disabled={!canSend} />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

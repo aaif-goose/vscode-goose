@@ -8,12 +8,21 @@ import {
   createCreateSessionMessage,
   createGetSessionsMessage,
   createSelectSessionMessage,
+  createSetSessionModelMessage,
+  createSetSessionModeMessage,
   isHistoryCompleteMessage,
   isSessionCreatedMessage,
   isSessionLoadedMessage,
+  isSessionSettingsMessage,
   isSessionsListMessage,
 } from '../../shared/messages';
-import { GroupedSessions, groupSessionsByDate, SessionEntry } from '../../shared/sessionTypes';
+import {
+  EMPTY_SESSION_SETTINGS,
+  GroupedSessions,
+  groupSessionsByDate,
+  SessionEntry,
+  SessionSettingsState,
+} from '../../shared/sessionTypes';
 import { onMessage, postMessage } from '../bridge';
 
 interface SessionState {
@@ -23,6 +32,7 @@ interface SessionState {
   isLoading: boolean;
   isLoadingHistory: boolean;
   historyUnavailable: boolean;
+  settings: SessionSettingsState;
 }
 
 type SessionAction =
@@ -33,7 +43,8 @@ type SessionAction =
   | { type: 'CLOSE_PANEL' }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_LOADING_HISTORY'; payload: boolean }
-  | { type: 'SET_HISTORY_UNAVAILABLE'; payload: boolean };
+  | { type: 'SET_HISTORY_UNAVAILABLE'; payload: boolean }
+  | { type: 'SET_SETTINGS'; payload: SessionSettingsState };
 
 const initialState: SessionState = {
   sessions: [],
@@ -42,6 +53,7 @@ const initialState: SessionState = {
   isLoading: false,
   isLoadingHistory: false,
   historyUnavailable: false,
+  settings: EMPTY_SESSION_SETTINGS,
 };
 
 function sessionReducer(state: SessionState, action: SessionAction): SessionState {
@@ -52,6 +64,7 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
         sessions: action.payload.sessions,
         activeSessionId: action.payload.activeSessionId,
         isLoading: false,
+        isLoadingHistory: false,
       };
 
     case 'SET_ACTIVE_SESSION':
@@ -68,7 +81,6 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
           ...state.sessions.filter(s => s.sessionId !== action.payload.sessionId),
         ],
         activeSessionId: action.payload.sessionId,
-        isPanelOpen: false,
       };
 
     case 'TOGGLE_PANEL':
@@ -102,6 +114,12 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
         isLoadingHistory: false,
       };
 
+    case 'SET_SETTINGS':
+      return {
+        ...state,
+        settings: action.payload,
+      };
+
     default:
       return state;
   }
@@ -116,11 +134,14 @@ export interface UseSessionReturn {
   isLoading: boolean;
   isLoadingHistory: boolean;
   historyUnavailable: boolean;
+  settings: SessionSettingsState;
   togglePanel: () => void;
   closePanel: () => void;
   selectSession: (sessionId: string) => void;
   createSession: () => void;
   refreshSessions: () => void;
+  setSessionMode: (modeId: string) => void;
+  setSessionModel: (modelId: string) => void;
 }
 
 export function useSession(): UseSessionReturn {
@@ -151,9 +172,10 @@ export function useSession(): UseSessionReturn {
           type: 'SET_HISTORY_UNAVAILABLE',
           payload: message.payload.historyUnavailable ?? false,
         });
-        dispatch({ type: 'CLOSE_PANEL' });
       } else if (isHistoryCompleteMessage(message)) {
         dispatch({ type: 'SET_LOADING_HISTORY', payload: false });
+      } else if (isSessionSettingsMessage(message)) {
+        dispatch({ type: 'SET_SETTINGS', payload: message.payload.settings });
       }
     });
 
@@ -187,6 +209,14 @@ export function useSession(): UseSessionReturn {
     postMessage(createGetSessionsMessage());
   }, []);
 
+  const setSessionMode = useCallback((modeId: string) => {
+    postMessage(createSetSessionModeMessage(modeId));
+  }, []);
+
+  const setSessionModel = useCallback((modelId: string) => {
+    postMessage(createSetSessionModelMessage(modelId));
+  }, []);
+
   const groupedSessions = groupSessionsByDate(state.sessions);
 
   const activeSession = state.activeSessionId
@@ -202,10 +232,13 @@ export function useSession(): UseSessionReturn {
     isLoading: state.isLoading,
     isLoadingHistory: state.isLoadingHistory,
     historyUnavailable: state.historyUnavailable,
+    settings: state.settings,
     togglePanel,
     closePanel,
     selectSession,
     createSession,
     refreshSessions,
+    setSessionMode,
+    setSessionModel,
   };
 }

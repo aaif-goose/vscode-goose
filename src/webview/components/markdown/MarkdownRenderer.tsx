@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -9,6 +10,20 @@ interface MarkdownRendererProps {
   content: string;
   isStreaming?: boolean;
   variant?: 'default' | 'bubble';
+}
+
+const STREAMING_CURSOR_CLASS = 'markdown-streaming-cursor';
+
+function removeStreamingCursors(container: HTMLElement): void {
+  container.querySelectorAll(`.${STREAMING_CURSOR_CLASS}`).forEach(cursor => cursor.remove());
+}
+
+function findCursorTarget(container: HTMLElement): HTMLElement {
+  const candidates = container.querySelectorAll<HTMLElement>(
+    'p, li, blockquote, pre code, pre, h1, h2, h3, h4, h5, h6, td, th, code'
+  );
+
+  return candidates[candidates.length - 1] ?? container;
 }
 
 function createComponents(variant: 'default' | 'bubble'): Components {
@@ -227,14 +242,32 @@ export function MarkdownRenderer({
   isStreaming = false,
   variant = 'default',
 }: MarkdownRendererProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const components = createComponents(variant);
+  const contentClassName =
+    variant === 'bubble' ? 'markdown-content markdown-content-bubble' : 'markdown-content';
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    removeStreamingCursors(container);
+
+    if (!isStreaming) return;
+
+    const target = findCursorTarget(container);
+    const cursor = document.createElement('span');
+    cursor.className = `${STREAMING_CURSOR_CLASS} inline-block h-4 w-2 translate-y-[1px] align-baseline bg-current opacity-80 animate-pulse`;
+    cursor.setAttribute('aria-hidden', 'true');
+    cursor.style.marginInlineStart = '0.3rem';
+    target.appendChild(cursor);
+  });
 
   return (
-    <div className="markdown-content">
+    <div ref={containerRef} className={contentClassName}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>
-      {isStreaming && <span className="inline-block w-2 h-4 ml-0.5 bg-current animate-pulse" />}
     </div>
   );
 }

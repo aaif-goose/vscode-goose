@@ -3,8 +3,8 @@
  */
 
 import { ContextChip, FileSearchResult } from './contextTypes';
-import { SessionEntry } from './sessionTypes';
-import { ChatMessage, ProcessStatus } from './types';
+import { SessionEntry, SessionSettingsState } from './sessionTypes';
+import { ChatMessage, ProcessStatus, ToolCallLocation } from './types';
 
 /** Types of messages that can be sent between webview and extension */
 export enum WebviewMessageType {
@@ -20,8 +20,16 @@ export enum WebviewMessageType {
   SEND_MESSAGE = 'SEND_MESSAGE',
   /** Extension streams a response token to webview */
   STREAM_TOKEN = 'STREAM_TOKEN',
+  /** Extension streams assistant thinking text to webview */
+  THINKING_DELTA = 'THINKING_DELTA',
+  /** Extension reports a tool call start to webview */
+  TOOL_CALL_START = 'TOOL_CALL_START',
+  /** Extension reports a tool call update to webview */
+  TOOL_CALL_UPDATE = 'TOOL_CALL_UPDATE',
   /** Extension signals generation is complete */
   GENERATION_COMPLETE = 'GENERATION_COMPLETE',
+  /** Extension signals generation failed */
+  GENERATION_ERROR = 'GENERATION_ERROR',
   /** Webview requests to stop generation */
   STOP_GENERATION = 'STOP_GENERATION',
   /** Extension signals generation was cancelled */
@@ -62,6 +70,12 @@ export enum WebviewMessageType {
   SEARCH_RESULTS = 'SEARCH_RESULTS',
   /** Extension requests focus on chat input */
   FOCUS_CHAT_INPUT = 'FOCUS_CHAT_INPUT',
+  /** Extension sends active session settings to webview */
+  SESSION_SETTINGS = 'SESSION_SETTINGS',
+  /** Webview requests changing the active session mode */
+  SET_SESSION_MODE = 'SET_SESSION_MODE',
+  /** Webview requests changing the active session model */
+  SET_SESSION_MODEL = 'SET_SESSION_MODEL',
 }
 
 // ============================================================================
@@ -116,9 +130,45 @@ export interface StreamTokenPayload {
   readonly done: boolean;
 }
 
+/** Payload for THINKING_DELTA message */
+export interface ThinkingDeltaPayload {
+  readonly messageId: string;
+  readonly text: string;
+}
+
+/** Payload for TOOL_CALL_START message */
+export interface ToolCallStartPayload {
+  readonly messageId: string;
+  readonly toolCallId: string;
+  readonly title: string;
+  readonly status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  readonly kind?: string;
+  readonly rawInput?: unknown;
+  readonly locations?: readonly ToolCallLocation[];
+}
+
+/** Payload for TOOL_CALL_UPDATE message */
+export interface ToolCallUpdatePayload {
+  readonly messageId: string;
+  readonly toolCallId: string;
+  readonly title?: string;
+  readonly status?: 'pending' | 'in_progress' | 'completed' | 'failed';
+  readonly kind?: string;
+  readonly rawInput?: unknown;
+  readonly rawOutput?: unknown;
+  readonly contentPreview?: readonly string[];
+  readonly locations?: readonly ToolCallLocation[];
+}
+
 /** Payload for GENERATION_COMPLETE message */
 export interface GenerationCompletePayload {
   readonly messageId: string;
+}
+
+/** Payload for GENERATION_ERROR message */
+export interface GenerationErrorPayload {
+  readonly messageId: string;
+  readonly error: string;
 }
 
 /** Payload for STOP_GENERATION message (empty payload) */
@@ -214,6 +264,21 @@ export interface SearchResultsPayload {
 /** Payload for FOCUS_CHAT_INPUT message (empty) */
 export type FocusChatInputPayload = Record<string, never>;
 
+/** Payload for SESSION_SETTINGS message */
+export interface SessionSettingsPayload {
+  readonly settings: SessionSettingsState;
+}
+
+/** Payload for SET_SESSION_MODE message */
+export interface SetSessionModePayload {
+  readonly modeId: string;
+}
+
+/** Payload for SET_SESSION_MODEL message */
+export interface SetSessionModelPayload {
+  readonly modelId: string;
+}
+
 // ============================================================================
 // Message Type Mapping
 // ============================================================================
@@ -226,7 +291,11 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.ERROR]: ErrorPayload;
   [WebviewMessageType.SEND_MESSAGE]: SendMessagePayload;
   [WebviewMessageType.STREAM_TOKEN]: StreamTokenPayload;
+  [WebviewMessageType.THINKING_DELTA]: ThinkingDeltaPayload;
+  [WebviewMessageType.TOOL_CALL_START]: ToolCallStartPayload;
+  [WebviewMessageType.TOOL_CALL_UPDATE]: ToolCallUpdatePayload;
   [WebviewMessageType.GENERATION_COMPLETE]: GenerationCompletePayload;
+  [WebviewMessageType.GENERATION_ERROR]: GenerationErrorPayload;
   [WebviewMessageType.STOP_GENERATION]: StopGenerationPayload;
   [WebviewMessageType.GENERATION_CANCELLED]: GenerationCancelledPayload;
   [WebviewMessageType.CHAT_HISTORY]: ChatHistoryPayload;
@@ -247,6 +316,9 @@ export interface WebviewMessagePayloads {
   [WebviewMessageType.FILE_SEARCH]: FileSearchPayload;
   [WebviewMessageType.SEARCH_RESULTS]: SearchResultsPayload;
   [WebviewMessageType.FOCUS_CHAT_INPUT]: FocusChatInputPayload;
+  [WebviewMessageType.SESSION_SETTINGS]: SessionSettingsPayload;
+  [WebviewMessageType.SET_SESSION_MODE]: SetSessionModePayload;
+  [WebviewMessageType.SET_SESSION_MODEL]: SetSessionModelPayload;
 }
 
 /** Generic webview message with typed payload */
@@ -335,6 +407,73 @@ export function createStreamTokenMessage(
   };
 }
 
+/** Create a THINKING_DELTA message */
+export function createThinkingDeltaMessage(
+  messageId: string,
+  text: string
+): WebviewMessage<WebviewMessageType.THINKING_DELTA> {
+  return {
+    type: WebviewMessageType.THINKING_DELTA,
+    payload: { messageId, text },
+  };
+}
+
+/** Create a TOOL_CALL_START message */
+export function createToolCallStartMessage(
+  messageId: string,
+  toolCallId: string,
+  title: string,
+  status: ToolCallStartPayload['status'],
+  options?: {
+    kind?: string;
+    rawInput?: unknown;
+    locations?: readonly ToolCallLocation[];
+  }
+): WebviewMessage<WebviewMessageType.TOOL_CALL_START> {
+  return {
+    type: WebviewMessageType.TOOL_CALL_START,
+    payload: {
+      messageId,
+      toolCallId,
+      title,
+      status,
+      kind: options?.kind,
+      rawInput: options?.rawInput,
+      locations: options?.locations,
+    },
+  };
+}
+
+/** Create a TOOL_CALL_UPDATE message */
+export function createToolCallUpdateMessage(
+  messageId: string,
+  toolCallId: string,
+  options?: {
+    title?: string;
+    status?: ToolCallUpdatePayload['status'];
+    kind?: string;
+    rawInput?: unknown;
+    rawOutput?: unknown;
+    contentPreview?: readonly string[];
+    locations?: readonly ToolCallLocation[];
+  }
+): WebviewMessage<WebviewMessageType.TOOL_CALL_UPDATE> {
+  return {
+    type: WebviewMessageType.TOOL_CALL_UPDATE,
+    payload: {
+      messageId,
+      toolCallId,
+      title: options?.title,
+      status: options?.status,
+      kind: options?.kind,
+      rawInput: options?.rawInput,
+      rawOutput: options?.rawOutput,
+      contentPreview: options?.contentPreview,
+      locations: options?.locations,
+    },
+  };
+}
+
 /** Create a GENERATION_COMPLETE message */
 export function createGenerationCompleteMessage(
   messageId: string
@@ -342,6 +481,17 @@ export function createGenerationCompleteMessage(
   return {
     type: WebviewMessageType.GENERATION_COMPLETE,
     payload: { messageId },
+  };
+}
+
+/** Create a GENERATION_ERROR message */
+export function createGenerationErrorMessage(
+  messageId: string,
+  error: string
+): WebviewMessage<WebviewMessageType.GENERATION_ERROR> {
+  return {
+    type: WebviewMessageType.GENERATION_ERROR,
+    payload: { messageId, error },
   };
 }
 
@@ -530,6 +680,36 @@ export function createFocusChatInputMessage(): WebviewMessage<WebviewMessageType
   };
 }
 
+/** Create a SESSION_SETTINGS message */
+export function createSessionSettingsMessage(
+  settings: SessionSettingsState
+): WebviewMessage<WebviewMessageType.SESSION_SETTINGS> {
+  return {
+    type: WebviewMessageType.SESSION_SETTINGS,
+    payload: { settings },
+  };
+}
+
+/** Create a SET_SESSION_MODE message */
+export function createSetSessionModeMessage(
+  modeId: string
+): WebviewMessage<WebviewMessageType.SET_SESSION_MODE> {
+  return {
+    type: WebviewMessageType.SET_SESSION_MODE,
+    payload: { modeId },
+  };
+}
+
+/** Create a SET_SESSION_MODEL message */
+export function createSetSessionModelMessage(
+  modelId: string
+): WebviewMessage<WebviewMessageType.SET_SESSION_MODEL> {
+  return {
+    type: WebviewMessageType.SET_SESSION_MODEL,
+    payload: { modelId },
+  };
+}
+
 // ============================================================================
 // Type Guards
 // ============================================================================
@@ -589,11 +769,39 @@ export function isStreamTokenMessage(
   return isWebviewMessage(message, WebviewMessageType.STREAM_TOKEN);
 }
 
+/** Check if message is THINKING_DELTA */
+export function isThinkingDeltaMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.THINKING_DELTA> {
+  return isWebviewMessage(message, WebviewMessageType.THINKING_DELTA);
+}
+
+/** Check if message is TOOL_CALL_START */
+export function isToolCallStartMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.TOOL_CALL_START> {
+  return isWebviewMessage(message, WebviewMessageType.TOOL_CALL_START);
+}
+
+/** Check if message is TOOL_CALL_UPDATE */
+export function isToolCallUpdateMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.TOOL_CALL_UPDATE> {
+  return isWebviewMessage(message, WebviewMessageType.TOOL_CALL_UPDATE);
+}
+
 /** Check if message is GENERATION_COMPLETE */
 export function isGenerationCompleteMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.GENERATION_COMPLETE> {
   return isWebviewMessage(message, WebviewMessageType.GENERATION_COMPLETE);
+}
+
+/** Check if message is GENERATION_ERROR */
+export function isGenerationErrorMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.GENERATION_ERROR> {
+  return isWebviewMessage(message, WebviewMessageType.GENERATION_ERROR);
 }
 
 /** Check if message is STOP_GENERATION */
@@ -719,4 +927,25 @@ export function isFocusChatInputMessage(
   message: unknown
 ): message is WebviewMessage<WebviewMessageType.FOCUS_CHAT_INPUT> {
   return isWebviewMessage(message, WebviewMessageType.FOCUS_CHAT_INPUT);
+}
+
+/** Check if message is SESSION_SETTINGS */
+export function isSessionSettingsMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SESSION_SETTINGS> {
+  return isWebviewMessage(message, WebviewMessageType.SESSION_SETTINGS);
+}
+
+/** Check if message is SET_SESSION_MODE */
+export function isSetSessionModeMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SET_SESSION_MODE> {
+  return isWebviewMessage(message, WebviewMessageType.SET_SESSION_MODE);
+}
+
+/** Check if message is SET_SESSION_MODEL */
+export function isSetSessionModelMessage(
+  message: unknown
+): message is WebviewMessage<WebviewMessageType.SET_SESSION_MODEL> {
+  return isWebviewMessage(message, WebviewMessageType.SET_SESSION_MODEL);
 }

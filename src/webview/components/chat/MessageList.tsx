@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, memo, useEffect, useImperativeHandle, useRef } from 'react';
 import { ChatMessage, MessageStatus } from '../../../shared/types';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
 import { GooseWatermark } from '../icons/GooseWatermark';
@@ -8,7 +8,6 @@ interface MessageListProps {
   messages: readonly ChatMessage[];
   isGenerating: boolean;
   focusedIndex: number | null;
-  onMessageFocus: (index: number) => void;
   onRetry: (content: string) => void;
 }
 
@@ -16,14 +15,16 @@ export interface MessageListHandle {
   scrollToMessage: (index: number) => void;
 }
 
-export const MessageList = forwardRef<MessageListHandle, MessageListProps>(function MessageList(
-  { messages, isGenerating, focusedIndex, onMessageFocus, onRetry },
+const MessageListComponent = forwardRef<MessageListHandle, MessageListProps>(function MessageList(
+  { messages, isGenerating, focusedIndex, onRetry },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const { scrollToBottom } = useAutoScroll(containerRef, {
     isStreaming: isGenerating,
+    contentRef,
   });
   const prevMessageCountRef = useRef(0);
   const hasInitialScrolled = useRef(false);
@@ -72,7 +73,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
       aria-live="polite"
       aria-label="Chat messages"
     >
-      <div className="flex flex-col gap-6">
+      <div ref={contentRef} className="flex flex-col gap-5">
         {messages.map((message, index) => (
           <div
             key={message.id}
@@ -88,7 +89,6 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
               message={message}
               isFocused={focusedIndex === index}
               isStreaming={isGenerating && message.status === MessageStatus.STREAMING}
-              onFocus={() => onMessageFocus(index)}
               onRetry={onRetry}
             />
           </div>
@@ -97,3 +97,7 @@ export const MessageList = forwardRef<MessageListHandle, MessageListProps>(funct
     </div>
   );
 });
+
+MessageListComponent.displayName = 'MessageList';
+
+export const MessageList = memo(MessageListComponent);

@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { EMPTY_SESSION_SETTINGS } from '../../../shared/sessionTypes';
 import { useChat } from '../../hooks/useChat';
 import { useKeyboardNav } from '../../hooks/useKeyboardNav';
 import { InputArea } from './InputArea';
@@ -9,11 +10,13 @@ interface ChatContainerProps {
 }
 
 export function ChatContainer({ className = '' }: ChatContainerProps) {
+  const noopSettingChange = useCallback((_value: string) => {
+    // Intentionally unused when session settings are hidden in this container.
+  }, []);
+
   const {
     messages,
     isGenerating,
-    inputValue,
-    setInputValue,
     sendMessage,
     stopGeneration,
     focusedIndex,
@@ -47,16 +50,16 @@ export function ChatContainer({ className = '' }: ChatContainerProps) {
         messages={messages}
         isGenerating={isGenerating}
         focusedIndex={focusedIndex}
-        onMessageFocus={setFocusedIndex}
         onRetry={retryMessage}
       />
       <InputArea
-        value={inputValue}
-        onChange={setInputValue}
         onSend={sendMessage}
         onStop={stopGeneration}
         isGenerating={isGenerating}
         disabled={false}
+        settings={EMPTY_SESSION_SETTINGS}
+        onModeChange={noopSettingChange}
+        onModelChange={noopSettingChange}
       />
     </div>
   );
