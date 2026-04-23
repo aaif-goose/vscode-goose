@@ -358,7 +358,8 @@ function setupAcpCommunication(
   subprocess: SubprocessManager,
   manager: SessionManager,
   log: Logger,
-  responseIdRef: { current: string | null }
+  responseIdRef: { current: string | null },
+  suppressHistoryReplay: { current: boolean }
 ): void {
   const getActiveSessionId = (): string | null => {
     return manager.getActiveSessionId();
@@ -375,11 +376,19 @@ function setupAcpCommunication(
     return op(clientResult.right);
   };
 
+  // When the restart flow silently reattaches an existing session the server
+  // still streams the full transcript, but the webview already holds that
+  // transcript as live messages -- forwarding the replay would just overwrite
+  // live timestamps with "Earlier" labels. Skip forwarding while the
+  // suppression flag is set; the reinit code clears it once its session/load
+  // has completed.
   manager.onHistoryMessage(message => {
+    if (suppressHistoryReplay.current) return;
     provider.postMessage(createHistoryMessage(message));
   });
 
   manager.onHistoryComplete((sessionId, messageCount) => {
+    if (suppressHistoryReplay.current) return;
     provider.postMessage(createHistoryCompleteMessage(sessionId, messageCount));
   });
 
@@ -559,7 +568,8 @@ async function reinitializeAcpOnRestart(
   subprocess: SubprocessManager,
   manager: SessionManager,
   workingDirectory: string,
-  log: Logger
+  log: Logger,
+  suppressHistoryReplay: { current: boolean }
 ): Promise<void> {
   const clientResult = subprocess.getClient();
   if (E.isLeft(clientResult)) {
@@ -567,17 +577,20 @@ async function reinitializeAcpOnRestart(
     return;
   }
 
-  // The webview still holds the live messages from before the restart. If the
-  // fresh subprocess can `session/load` the prior session, history replay
-  // would append every historical message on top of those live copies and
-  // show each turn twice. If it falls through to `session/new`, the live
-  // messages belong to a dead session id and are no longer meaningful.
-  // Either way, clear the transcript before the handshake so the post-restart
-  // view reflects the true server-side state.
-  provider.postMessage(createChatHistoryMessage([]));
-
+  // Suppress history forwarding for the duration of the handshake. If the
+  // fresh subprocess can `session/load` the prior session, we want the
+  // webview to keep its live transcript as-is (otherwise every message would
+  // re-render as "Earlier"). Only clear + repopulate if we fall through to
+  // `session/new`, because then the webview's live messages belong to a
+  // session id the new subprocess no longer knows about.
   const previousSessionId = manager.getActiveSessionId();
-  const session = await initializeAcpSession(clientResult.right, workingDirectory, manager, log);
+  suppressHistoryReplay.current = true;
+  let session: SessionEntry | null = null;
+  try {
+    session = await initializeAcpSession(clientResult.right, workingDirectory, manager, log);
+  } finally {
+    suppressHistoryReplay.current = false;
+  }
 
   if (!session) {
     log.warn('ACP re-init after restart failed to establish a session');
@@ -587,7 +600,12 @@ async function reinitializeAcpOnRestart(
   const isFreshSession = session.sessionId !== previousSessionId;
   if (isFreshSession) {
     log.info(`ACP re-init created fresh session ${session.sessionId} after restart`);
+    // The webview's live messages belonged to the dead session id; replace
+    // them with an empty transcript so the UI matches the new server state.
+    provider.postMessage(createChatHistoryMessage([]));
     provider.postMessage(createSessionCreatedMessage(session));
+  } else {
+    log.info(`ACP re-init silently reattached session ${session.sessionId} after restart`);
   }
   provider.postMessage(createSessionsListMessage(manager.getSessions(), session.sessionId));
 }
@@ -783,6 +801,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // double-subscribe to the same JsonRpcClient instance across restarts.
   const responseIdRef: { current: string | null } = { current: null };
   const lastSubscribedClient: { current: JsonRpcClient | null } = { current: null };
+  // When true, history messages emitted by `SessionManager.loadSession` are
+  // NOT forwarded to the webview. Used by the restart flow to silently
+  // reattach an existing session without re-rendering the live transcript.
+  const suppressHistoryReplay: { current: boolean } = { current: false };
   // Tracks whether the initial ACP handshake has completed. Post-restart
   // RUNNING transitions use this to decide whether to re-run the handshake
   // against the fresh subprocess (skip on the very first RUNNING because the
@@ -824,7 +846,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           subprocess,
           manager,
           getWorkspaceFolder(),
-          acpLogger
+          acpLogger,
+          suppressHistoryReplay
         ).catch(err => {
           acpLogger.error('ACP re-init after restart threw:', err);
         });
@@ -864,7 +887,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           subprocessManager,
           sessionManager,
           acpLogger,
-          responseIdRef
+          responseIdRef,
+          suppressHistoryReplay
         );
         subscribeSessionUpdates(
           webviewProvider,
