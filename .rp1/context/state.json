@@ -6,7 +6,14 @@
   "git_commit": "9f0bb705191acc9fca30c91b16c098c276e8c17a",
   "files_analyzed": 104,
   "languages": ["TypeScript", "TSX", "CSS", "Markdown"],
-  "frameworks": ["VS Code Extension API", "React 19", "Tailwind CSS 4", "fp-ts", "react-markdown", "ACP"],
+  "frameworks": [
+    "VS Code Extension API",
+    "React 19",
+    "Tailwind CSS 4",
+    "fp-ts",
+    "react-markdown",
+    "ACP"
+  ],
   "metrics": {
     "modules": 10,
     "components": 42,

@@ -51,3 +51,4 @@ bun.lockb
 .rp1/*
 !.rp1/context/
 !.rp1/context/**
+.rp1/context/meta.json
