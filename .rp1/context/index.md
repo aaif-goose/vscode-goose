@@ -1,21 +1,33 @@
-# VS Code Goose - Knowledge Base
+---
+scope: kbRoot
+path_pattern: "index.md"
+producer: knowledge-base
+type: document
+description: "Project overview and progressive KB entry point. Always generated -- serves as the navigation hub for all other KB documents."
+strictness: strict
+---
+# vscode-goose — Knowledge Base
 
 **Type**: Single Project
-**Languages**: TypeScript, TSX (React)
-**Version**: 0.1.0
-**Updated**: 2025-12-21
+**Languages**: TypeScript, TSX, CSS
+**Version**: 0.2.1
+**Updated**: 2026-04-23
 
 ## Project Summary
 
-VS Code extension providing a thin UI bridge to Goose AI agent via Agent Communication Protocol (ACP). Enables chat-based coding assistance with context attachment, file search, and session management directly within VS Code.
+vscode-goose is a VS Code extension that provides a thin UI bridge over ACP (Agent Communication Protocol) to the Goose AI agent subprocess. The extension owns no AI behavior — it orchestrates VS Code surfaces (chat webview, editor selection, commands) with a locally-spawned `goose` binary (≥ 1.16.0) over JSON-RPC 2.0 on ndjson-framed stdio.
 
 ## Quick Reference
 
 | Aspect | Value |
 |--------|-------|
-| Entry Point | `src/extension/extension.ts` |
-| Key Pattern | Bridge/Adapter with Message-Driven Communication |
-| Tech Stack | TypeScript, React 19, Tailwind CSS 4, fp-ts, Bun |
+| Entry Point | `src/extension/extension.ts` (`activate()` on `onStartupFinished`) |
+| Webview Entry | `src/webview/index.tsx` → `<App />` |
+| Key Pattern | Thin UI bridge; message-driven; version-gated activation |
+| Error Model | fp-ts `TaskEither<GooseError, T>` |
+| Tech Stack | VS Code API `^1.95.0`, React 19, Tailwind 4, fp-ts 2, react-markdown |
+| Runtime / Tooling | Bun (runtime + bundler + tests), Biome 2 (lint+format), Husky + commitlint, release-please |
+| Packaging | `vsce package --no-dependencies` → VSIX, tag prefix `vscode-v`, publisher `block` |
 
 ## KB File Manifest
 
@@ -23,10 +35,11 @@ VS Code extension providing a thin UI bridge to Goose AI agent via Agent Communi
 
 | File | Lines | Load For |
 |------|-------|----------|
-| architecture.md | ~137 | System design, component relationships, data flows |
-| modules.md | ~160 | Component breakdown, module responsibilities |
-| patterns.md | ~70 | Code conventions, implementation patterns |
-| concept_map.md | ~150 | Domain terminology, business concepts |
+| architecture.md | ~218 | System design, component relationships, data flows, deployment |
+| interaction-model.md | ~122 | Cross-surface interaction semantics, UX principles, a11y |
+| modules.md | ~170 | Component breakdown, module responsibilities, metrics |
+| patterns.md | ~121 | Code conventions, error handling, testing, tooling |
+| concept_map.md | ~146 | Domain terminology, ACP vocabulary, type relationships |
 
 ## Task-Based Loading
 
@@ -35,7 +48,7 @@ VS Code extension providing a thin UI bridge to Goose AI agent via Agent Communi
 | Code review | `patterns.md` |
 | Bug investigation | `architecture.md`, `modules.md` |
 | Feature implementation | `modules.md`, `patterns.md` |
-| Context chip work | `concept_map.md`, `modules.md` |
+| Frontend / UX / surface work | `interaction-model.md`, `modules.md`, `patterns.md` |
 | Strategic analysis | ALL files |
 
 ## How to Load
@@ -48,42 +61,20 @@ Read: .rp1/context/{filename}
 
 ```
 src/
-├── extension/      # VS Code extension host (Node.js)
-│   ├── extension.ts      # Main entry, activation orchestration
-│   ├── subprocessManager.ts # Goose process lifecycle
-│   ├── jsonRpcClient.ts  # ACP JSON-RPC communication
-│   ├── sessionManager.ts # Session lifecycle, ACP coordination
-│   ├── versionChecker.ts # Binary version validation (>= 1.16.0)
-│   ├── fileSearchService.ts # @ file picker search
-│   ├── commands.ts       # Command registration (Cmd+Shift+G)
-│   └── webviewProvider.ts # Webview lifecycle, ready sync
-├── webview/        # React chat UI (sandboxed iframe)
-│   ├── App.tsx           # Root with status, session, chat
-│   ├── bridge.ts         # postMessage abstraction
-│   ├── hooks/            # useChat, useContextChips, useFilePicker
-│   ├── components/
-│   │   ├── chat/         # ChatView, InputArea, ChipStack
-│   │   ├── picker/       # FilePicker dropdown
-│   │   └── session/      # SessionHeader, SessionList
-└── shared/         # Shared types between extension/webview
-    ├── messages.ts       # 24 WebviewMessage types
-    ├── types.ts          # ProcessStatus, ChatMessage
-    ├── errors.ts         # GooseError discriminated union
-    ├── contextTypes.ts   # ContextChip, FileSearchResult
-    └── fileReferenceParser.ts # Parse file refs from markdown
+├── extension/        # Node host: activation, subprocess, ACP client, session mgmt, webview provider
+├── webview/          # React 19 iframe UI
+│   ├── components/   # chat/, picker/, session/, markdown/, icons/, VersionBlockedView
+│   ├── hooks/        # useChat, useSession, useContextChips, useFilePicker, useKeyboardNav, useAutoScroll
+│   ├── App.tsx · index.tsx · bridge.ts · theme.ts · styles.css
+└── shared/           # Cross-boundary types: messages, types, contextTypes, sessionTypes, errors, fileReferenceParser
+src/test/mocks/       # Shared test doubles (vscode API, ndjson streams)
+.github/workflows/    # ci.yml (main + release-please), pr-checks.yml
 ```
-
-## Key Features
-
-- **Context Chips**: Attach files/selections via @ picker or Cmd+Shift+G
-- **Version Gating**: Validates goose >= 1.16.0 before activation
-- **Session Management**: Persistent sessions with history replay
-- **Streaming Responses**: Token-by-token AI response display
-- **fp-ts Error Handling**: TaskEither for typed async errors
 
 ## Navigation
 
-- **[architecture.md](architecture.md)**: System design and diagrams
-- **[modules.md](modules.md)**: Component breakdown
-- **[patterns.md](patterns.md)**: Code conventions
-- **[concept_map.md](concept_map.md)**: Domain terminology
+- **[architecture.md](architecture.md)** — System design, Mermaid topology, data flows, CI/release
+- **[interaction-model.md](interaction-model.md)** — Surfaces, user-visible states, feedback loops, a11y
+- **[modules.md](modules.md)** — Module inventory, component table, dependency graph, metrics
+- **[patterns.md](patterns.md)** — Conventions, typing, error channel, tooling (Bun + Biome)
+- **[concept_map.md](concept_map.md)** — Types, glossary (Goose, ACP, chips, sessionUpdate), relationships

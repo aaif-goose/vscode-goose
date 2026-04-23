@@ -1,179 +1,170 @@
+---
+scope: kbRoot
+path_pattern: "modules.md"
+producer: knowledge-base
+type: document
+description: "Module and component breakdown with dependency graphs, metrics, and code quality insights for a single-project codebase."
+strictness: strict
+---
 # Module & Component Breakdown
 
-**Project**: VS Code Goose
-**Analysis Date**: 2025-12-21
-**Modules Analyzed**: 7 module groups
+**Project**: vscode-goose
+**Analysis Date**: 2026-04-23
+**Modules Analyzed**: 10
 
 ## Core Modules
 
-### Extension Module (`src/extension/`)
-**Purpose**: VS Code extension host - manages lifecycle, subprocess, ACP session, version checking, file search
-**Files**: 12 | **Lines**: ~2,100
+### `src/extension/`
+**Purpose**: VS Code extension host — lifecycle, subprocess, ACP session, version checking, file search, webview hosting.
+**Complexity**: Medium–High
+**File count**: 12 non-test .ts
+**Key files**: `extension.ts`, `subprocessManager.ts`, `jsonRpcClient.ts`, `sessionManager.ts`, `webviewProvider.ts`, `commands.ts`, `versionChecker.ts`, `fileSearchService.ts`, `binaryDiscovery.ts`, `sessionStorage.ts`, `config.ts`, `logger.ts`.
+**Testing**: colocated `*.test.ts` (binaryDiscovery, sessionStorage, versionChecker, jsonRpcClient) + `subprocess.integration.test.ts`.
 
-**Key Components**:
-| Component | File | Purpose |
-|-----------|------|---------|
-| Extension Entry | `extension.ts` | Orchestrates activation, ACP session init, wires components |
-| SubprocessManager | `subprocessManager.ts` | Spawns goose binary, manages lifecycle events |
-| JsonRpcClient | `jsonRpcClient.ts` | JSON-RPC 2.0 client with ndjson framing |
-| SessionManager | `sessionManager.ts` | Session lifecycle, history replay, ACP coordination |
-| WebviewProvider | `webviewProvider.ts` | Webview lifecycle, message queue, ready sync |
-| Commands | `commands.ts` | Command registration (showLogs, restart, sendSelectionToChat) |
-| VersionChecker | `versionChecker.ts` | Binary version validation (>= 1.16.0) |
-| FileSearchService | `fileSearchService.ts` | Workspace file search for @ picker |
-| BinaryDiscovery | `binaryDiscovery.ts` | Cross-platform goose binary discovery |
-| SessionStorage | `sessionStorage.ts` | Persists session metadata to globalState |
-| Config | `config.ts` | VS Code configuration reader |
-| Logger | `logger.ts` | Source-tagged logger using OutputChannel |
+### `src/shared/`
+**Purpose**: Cross-boundary type contracts and small utilities compiled into both bundles.
+**Complexity**: Low
+**File count**: 7 non-test .ts
+**Key files**: `messages.ts`, `types.ts`, `contextTypes.ts`, `sessionTypes.ts`, `errors.ts`, `fileReferenceParser.ts`, `index.ts`.
+**Testing**: `types.test.ts`, `messages.test.ts`, `errors.test.ts`, `fileReferenceParser.test.ts`.
 
-### Shared Module (`src/shared/`)
-**Purpose**: Shared types and utilities between extension and webview
-**Files**: 7 | **Lines**: ~1,100
+### `src/webview/`
+**Purpose**: React 19 chat UI rendered inside sandboxed VS Code webview iframe.
+**Key files**: `App.tsx`, `index.tsx`, `bridge.ts`, `theme.ts`; `styles.css` (Tailwind 4 build output).
 
-**Key Components**:
-| Component | File | Purpose |
-|-----------|------|---------|
-| Messages | `messages.ts` | 24 WebviewMessage types, factories, guards (~700 lines) |
-| Types | `types.ts` | ProcessStatus, ChatMessage, MessageRole, MessageContext |
-| ContextTypes | `contextTypes.ts` | ContextChip, FileSearchResult, LineRange |
-| SessionTypes | `sessionTypes.ts` | SessionEntry, AgentCapabilities, groupSessionsByDate |
-| Errors | `errors.ts` | GooseError discriminated union, factory functions |
-| FileReferenceParser | `fileReferenceParser.ts` | Parse file references from markdown |
-| Index | `index.ts` | Re-exports for convenient imports |
+### `src/webview/hooks/`
+**Purpose**: State management hooks for chat, session, context chips, file picker, autoscroll, keyboard nav.
+**Key files**: `useChat.ts`, `useSession.ts`, `useContextChips.ts`, `useFilePicker.ts`, `useAutoScroll.ts`, `useKeyboardNav.ts`.
 
-### Webview Module (`src/webview/`)
-**Purpose**: React-based chat UI in sandboxed iframe
-**Files**: 28 | **Lines**: ~2,500
+### `src/webview/components/chat/`
+**Purpose**: Chat UI primitives (container, view, message list/items, input area, chips, buttons, progress, errors).
+**Key files**: `ChatContainer.tsx`, `ChatView.tsx`, `MessageList.tsx`, `MessageItem.tsx`, `InputArea.tsx`, `ChipStack.tsx`, `ContextChip.tsx`, `AssistantMessage.tsx`, `UserMessage.tsx`, `FileReferenceCard.tsx`, `SendButton.tsx`, `StopButton.tsx`, `ProgressIndicator.tsx`, `ErrorMessage.tsx`, `index.ts`.
 
-**Sub-modules**:
-- `hooks/` - State management hooks (6 files)
-- `components/chat/` - Chat UI components (15 files)
-- `components/picker/` - File picker dropdown (2 files)
-- `components/icons/` - File type icons (2 files)
-- `components/session/` - Session management UI (3 files)
-- `components/markdown/` - Markdown rendering (3 files)
+### `src/webview/components/picker/`
+**Purpose**: `@`-mention file picker dropdown.
+**Key files**: `FilePicker.tsx`, `FilePickerItem.tsx`, `index.ts`.
+
+### `src/webview/components/session/`
+**Purpose**: Session management UI — header, list, per-session card.
+**Key files**: `SessionHeader.tsx`, `SessionList.tsx`, `SessionCard.tsx`, `index.ts`.
+
+### `src/webview/components/markdown/`
+**Purpose**: Markdown rendering with code blocks + copy affordance.
+**Key files**: `MarkdownRenderer.tsx`, `CodeBlock.tsx`, `CopyButton.tsx`.
+
+### `src/webview/components/icons/`
+**Purpose**: Icon assets — file-type glyph and Goose watermark.
+**Key files**: `FileTypeIcon.tsx`, `GooseWatermark.tsx`.
+
+### `src/test/mocks/`
+**Purpose**: Shared test doubles for the `vscode` API and ndjson streams used across unit + integration tests.
+**Key files**: `vscode.ts`, `streams.ts`, `mocks.test.ts`.
 
 ## Key Components
 
-### SubprocessManager
-**File**: `src/extension/subprocessManager.ts`
-**Purpose**: Manage goose subprocess from spawn to termination
-**Responsibilities**:
-- Spawn goose binary with ACP protocol
-- Handle process lifecycle events (exit, error)
-- Provide JsonRpcClient access
-- Graceful shutdown with SIGTERM then SIGKILL
-
-### JsonRpcClient
-**File**: `src/extension/jsonRpcClient.ts`
-**Purpose**: JSON-RPC 2.0 over stdin/stdout with ndjson framing
-**Responsibilities**:
-- Send requests with timeout handling
-- Route responses and notifications
-- Manage pending request lifecycle
-
-### SessionManager
-**File**: `src/extension/sessionManager.ts`
-**Purpose**: Coordinate session state between ACP and storage
-**Responsibilities**:
-- Create new ACP sessions
-- Load sessions with history replay
-- Track active session and capabilities
-- TaskEither-based API for error handling
-
-### WebviewProvider
-**File**: `src/extension/webviewProvider.ts`
-**Purpose**: VS Code WebviewViewProvider for chat panel
-**Responsibilities**:
-- Generate secure HTML with CSP
-- Queue messages until webview ready
-- Handle ready sync and reconnection
-- Status and version status updates
-
-### useChat Hook
-**File**: `src/webview/hooks/useChat.ts`
-**Purpose**: Chat message state management
-**Responsibilities**:
-- Reducer-based state with typed actions
-- Handle streaming tokens
-- Send messages with context chips
-- Persist input draft
-
-### useContextChips Hook
-**File**: `src/webview/hooks/useContextChips.ts`
-**Purpose**: Context chip state management
-**Responsibilities**:
-- Handle ADD_CONTEXT_CHIP messages
-- Detect duplicates
-- Keyboard navigation support
-- Aria-live announcements
-
-### useFilePicker Hook
-**File**: `src/webview/hooks/useFilePicker.ts`
-**Purpose**: @ mention file search
-**Responsibilities**:
-- Detect @ trigger at word boundary
-- Debounced search (100ms)
-- Keyboard navigation
-- Remove @query after selection
+| Component | File | Role | Primary responsibilities |
+|-----------|------|------|--------------------------|
+| Extension Entry | `src/extension/extension.ts` | entrypoint | activate()/deactivate(); wire services; version gate; register commands + webview |
+| SubprocessManager | `src/extension/subprocessManager.ts` | service | spawn goose; expose JsonRpcClient; emit exit/error; graceful SIGTERM→SIGKILL |
+| JsonRpcClient | `src/extension/jsonRpcClient.ts` | service | JSON-RPC 2.0 over stdio (ndjson); timeouts; pending-request map |
+| SessionManager | `src/extension/sessionManager.ts` | service | `session/new`/`session/load`; active session + capabilities; TaskEither API |
+| SessionStorage | `src/extension/sessionStorage.ts` | repository | VS Code `globalState` CRUD over `SessionEntry[]`; schemaVersion handling |
+| WebviewProvider | `src/extension/webviewProvider.ts` | controller | `WebviewViewProvider`; CSP nonce HTML; ready-sync queue; status broadcast |
+| Commands | `src/extension/commands.ts` | controller | `goose.showLogs`, `goose.restart`, `goose.sendSelectionToChat` |
+| VersionChecker | `src/extension/versionChecker.ts` | service | invoke `goose --version`; parse semver; gate ≥ 1.16.0 |
+| FileSearchService | `src/extension/fileSearchService.ts` | service | ranked `workspace.findFiles` for `@` picker |
+| BinaryDiscovery | `src/extension/binaryDiscovery.ts` | utility | cross-platform goose binary resolution (config override → PATH → known paths) |
+| Config | `src/extension/config.ts` | utility | typed reader for `goose.*` |
+| Logger | `src/extension/logger.ts` | utility | source-tagged logger over VS Code OutputChannel |
+| Messages | `src/shared/messages.ts` | contract | `WebviewMessage` union + factories + guards (~24 types) |
+| Shared Types | `src/shared/types.ts` | contract | ProcessStatus, ChatMessage, MessageRole, MessageContext |
+| ContextTypes | `src/shared/contextTypes.ts` | contract | ContextChip, FileSearchResult, LineRange |
+| SessionTypes | `src/shared/sessionTypes.ts` | contract | SessionEntry, AgentCapabilities, `groupSessionsByDate` |
+| Errors | `src/shared/errors.ts` | contract | `GooseError` discriminated union + factories |
+| FileReferenceParser | `src/shared/fileReferenceParser.ts` | utility | parse file references from assistant markdown |
+| App | `src/webview/App.tsx` | component | root webview; composes hooks; gates UI on version + ProcessStatus |
+| Bridge | `src/webview/bridge.ts` | utility | typed `postMessage` abstraction over VS Code webview API |
+| useChat / useSession / useContextChips / useFilePicker / useKeyboardNav / useAutoScroll | `src/webview/hooks/*` | hooks | UI state, bridge wiring, keyboard/autoscroll behavior |
+| ChatContainer / InputArea / MarkdownRenderer / FilePicker / SessionList / VersionBlockedView | `src/webview/components/**` | components | layout shell, composer, rendering, pickers, session UI, version-blocked screen |
 
 ## Module Dependencies
 
 ```mermaid
 graph TD
-    EXT[extension.ts] --> SubMgr[subprocessManager]
-    EXT --> SessMgr[sessionManager]
-    EXT --> WebProv[webviewProvider]
-    EXT --> CMD[commands]
-    EXT --> VC[versionChecker]
-    EXT --> FSS[fileSearchService]
-
-    SubMgr --> JsonRpc[jsonRpcClient]
-    SessMgr --> JsonRpc
-    SessMgr --> SessStore[sessionStorage]
-    WebProv --> MSG[shared/messages]
-
-    APP[App.tsx] --> UseChat[useChat]
-    APP --> UseSess[useSession]
-    APP --> UseChips[useContextChips]
-    CV[ChatView] --> IA[InputArea]
-    IA --> UFP[useFilePicker]
-    IA --> CS[ChipStack]
-    IA --> FP[FilePicker]
+    ExtEntry[extension.ts] --> Sub[subprocessManager]
+    ExtEntry --> Ver[versionChecker]
+    ExtEntry --> Disc[binaryDiscovery]
+    ExtEntry --> Sess[sessionManager]
+    ExtEntry --> WvP[webviewProvider]
+    ExtEntry --> Cmd[commands]
+    Sub --> Rpc[jsonRpcClient]
+    Sess --> Rpc
+    Sess --> Store[sessionStorage]
+    WvP --> SharedMsgs[shared/messages]
+    Cmd --> WvP
+    Cmd --> Sub
+    App[webview/App] --> Hooks[webview/hooks]
+    App --> Bridge[webview/bridge]
+    Bridge --> SharedMsgs
+    InputArea[components/chat/InputArea] --> useFilePicker
+    MarkdownRenderer[components/markdown/MarkdownRenderer] --> SharedParser[shared/fileReferenceParser]
+    SharedMsgs --> SharedTypes[shared/{types,contextTypes,sessionTypes,errors}]
 ```
 
-## External Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| vscode | ^1.95.0 | VS Code extension API |
-| fp-ts | ^2.16.0 | Functional programming |
-| react | ^19.1.0 | UI component library |
-| react-markdown | ^10.1.0 | Markdown rendering |
-| react-syntax-highlighter | ^15.6.1 | Code syntax highlighting |
-| @tailwindcss/cli | ^4.1.0 | CSS framework |
+### Import Analysis
+- **Most imported (fan-in)**: `src/shared/messages.ts` (extension + webview consumers).
+- **Most dependencies (fan-out)**: `src/extension/extension.ts` (wires every host-side service).
+- **Circular dependencies**: none detected.
 
 ## Module Metrics
 
-| Module | Files | Lines | Components |
-|--------|-------|-------|------------|
-| extension | 12 | ~2,100 | 12 |
-| shared | 7 | ~1,100 | 6 |
-| webview | 28 | ~2,500 | 24 |
-| webview/hooks | 6 | ~850 | 6 |
-| webview/components/chat | 15 | ~950 | 14 |
-| webview/components/picker | 2 | ~160 | 2 |
+| Module | Files | Components | Internal deps | External deps |
+|--------|-------|------------|---------------|---------------|
+| `src/extension` | 12 | 12 | 11 | 2 (`vscode`, `fp-ts`) |
+| `src/shared` | 7 | 7 | 4 | 0 |
+| `src/webview` | 4 (+ `styles.css`) | 4 | 6 | 2 (`react`, `react-dom`) |
+| `src/webview/hooks` | 6 | 6 | 4 | 1 (`react`) |
+| `src/webview/components/chat` | 15 | 14 | 9 | 1 (`react`) |
+| `src/webview/components/picker` | 3 | 2 | 2 | 1 |
+| `src/webview/components/session` | 4 | 3 | 2 | 1 |
+| `src/webview/components/markdown` | 3 | 3 | 2 | 2 (`react-markdown`, `react-syntax-highlighter`) |
+| `src/webview/components/icons` | 2 | 2 | 0 | 1 |
+| `src/test/mocks` | 3 | — | — | — |
+
+### External Dependencies (runtime)
+- `vscode` `^1.95.0` — VS Code extension API
+- `react` / `react-dom` `^19.1.0` — UI
+- `react-markdown` `^10.1.0`
+- `react-syntax-highlighter` `^15.6.1`
+- `fp-ts` `^2.16.0` — TaskEither-based error handling
+- `@tailwindcss/cli` `^4.1.0` — Tailwind v4 build
+- `@vscode/vsce` — packaging (devDependency)
+
+## Module Boundaries
+
+- **`src/extension`** — public API exposed via `package.json` contributions (commands, view, settings, keybinding); internal services are implementation detail.
+- **`src/shared`** — pure type + factory module; must stay free of VS Code and DOM APIs.
+- **`src/webview`** — communicates with host exclusively through `Bridge` + `shared/messages`.
 
 ## Cross-Module Patterns
 
-### Context Chip Flow
-Editor selection → extension/commands → shared/messages → webview/useContextChips → components/ChipStack → sent with message as resource_link
+- **Bridge + Typed Messages** — single discriminated union in `shared/messages.ts` with factories and guards on both sides. Involved: `extension/webviewProvider`, `webview/bridge`, `shared/messages`.
+- **Ready-Sync Message Queue** — `WebviewProvider` buffers host→webview messages until ready. Involved: `extension/webviewProvider`, `webview/App`.
+- **TaskEither Error Channel** — extension-side services return `TaskEither<GooseError, T>`. Involved: `extension/sessionManager`, `extension/versionChecker`, `shared/errors`.
+- **Context Chip Flow** — editor selection → commands → shared messages → `useContextChips` → `ChipStack` → sent with message as `resource_link`. Involved: `extension/commands`, `shared/messages`, `webview/hooks/useContextChips`, `webview/components/chat/ChipStack`.
+- **File Picker Request/Response** — webview `@` trigger → `FILE_SEARCH_REQUEST` → `fileSearchService` → `FILE_SEARCH_RESULT` → `FilePicker`. Involved: `useFilePicker`, `shared/messages`, `extension/fileSearchService`, `components/picker/FilePicker`.
+- **Version Gating** — `versionChecker` result broadcast as `VERSION_STATUS`; webview swaps chat UI for `VersionBlockedView` when unsupported.
+- **Shared Test Mocks** — `src/test/mocks` centralizes `vscode` API and ndjson stream doubles across unit and integration tests.
 
-### File Picker Request-Response
-Webview @ trigger → shared/messages → extension/fileSearchService → shared/messages → webview/FilePicker dropdown
+## Code Quality Insights
 
-### Version Gating
-extension/versionChecker → shared/messages → webview/VersionBlockedView
+### Well-Structured Modules
+- **`src/shared`** — pure, framework-free contracts with exhaustive factories + guards per message variant.
+- **`src/extension`** — single-responsibility services with consistent TaskEither error channel.
+- **`src/webview/hooks`** — hooks composed as reducers with typed action unions; leaf state lives close to consumers.
 
-### Bridge Communication
-Extension and webview communicate via typed postMessage with factories and guards. Messages are queued until webview ready.
+### Architectural Patterns (applied across modules)
+- **Typed discriminated unions** at every cross-boundary surface.
+- **Ready-sync handshake** for webview mount race conditions.
+- **Capability negotiation** (from ACP `initialize`) gating optional requests in `SessionManager`.
+- **Version-gated activation** before any ACP interaction.
