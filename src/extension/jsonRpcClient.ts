@@ -159,12 +159,13 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
           ...(params !== undefined && { params }),
         };
 
-        // Resolve effective timeout:
-        //   - explicit `null` -> no timer (request never times out client-side)
-        //   - explicit number -> per-call override
-        //   - omitted         -> fall back to the client default
-        const effectiveTimeout =
-          options && 'timeoutMs' in options ? (options.timeoutMs ?? null) : timeoutMs;
+        // Resolve effective timeout per the JsonRpcRequestOptions contract:
+        //   - `null`      -> no timer (request never times out client-side)
+        //   - `number`    -> per-call override
+        //   - `undefined` / omitted -> fall back to the client default
+        // Using `!== undefined` here (rather than `in` + `??`) is important:
+        // `{ timeoutMs: undefined }` must behave the same as an omitted key.
+        const effectiveTimeout = options?.timeoutMs !== undefined ? options.timeoutMs : timeoutMs;
 
         let timer: ReturnType<typeof setTimeout> | undefined;
         if (effectiveTimeout !== null) {

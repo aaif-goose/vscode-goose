@@ -5,6 +5,7 @@ import {
   createSendMessageMessage,
   createStopGenerationMessage,
   isChatHistoryMessage,
+  isErrorMessage,
   isGenerationCancelledMessage,
   isGenerationCompleteMessage,
   isHistoryMessage,
@@ -221,6 +222,15 @@ export function useChat(): UseChatReturn {
         });
       } else if (isSessionCreatedMessage(message)) {
         dispatch({ type: 'CLEAR_MESSAGES' });
+      } else if (isErrorMessage(message)) {
+        const { title, message: body } = message.payload;
+        dispatch({
+          type: 'ADD_ERROR_MESSAGE',
+          payload: {
+            id: generateId(),
+            content: body ? `${title}: ${body}` : title,
+          },
+        });
       }
     });
 

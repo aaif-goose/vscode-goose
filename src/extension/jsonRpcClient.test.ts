@@ -176,6 +176,24 @@ describe('createJsonRpcClient', () => {
       }
     });
 
+    test('request with timeoutMs: undefined inherits the client default', async () => {
+      // Default client timeout for this describe() is 1000ms. Explicit
+      // `undefined` must behave exactly like an omitted option and time out.
+      const shortTimeoutConfig: JsonRpcClientConfig = {
+        stdin: mockStreams.stdin,
+        stdout: mockStreams.stdout,
+        logger,
+        timeoutMs: 50,
+      };
+      const c = createJsonRpcClient(shortTimeoutConfig);
+      const result = await c.request('slow.method', undefined, { timeoutMs: undefined })();
+
+      expect(E.isLeft(result)).toBe(true);
+      if (E.isLeft(result)) {
+        expect(result.left._tag).toBe('JsonRpcTimeoutError');
+      }
+    });
+
     test('request with timeoutMs: null never times out', async () => {
       // Default client timeout for this describe() is 1000ms. A response pushed
       // after 1500ms would normally fire the timeout timer; with `timeoutMs: null`

@@ -353,13 +353,42 @@ async function initializeAcpSession(
   return result.right;
 }
 
-function setupAcpCommunication(
+/**
+ * Register forwarders for `SessionManager`'s history callbacks. MUST run
+ * BEFORE the first `initializeAcpSession` so the `session/load` replay
+ * triggered during startup actually reaches the webview. When the restart
+ * flow silently reattaches an existing session the webview already holds the
+ * live transcript; `suppressHistoryReplay.current = true` skips forwarding in
+ * that window so we don't overwrite live timestamps with "Earlier" labels.
+ */
+function registerHistoryForwarding(
+  provider: WebviewProvider,
+  manager: SessionManager,
+  suppressHistoryReplay: { current: boolean }
+): void {
+  manager.onHistoryMessage(message => {
+    if (suppressHistoryReplay.current) return;
+    provider.postMessage(createHistoryMessage(message));
+  });
+
+  manager.onHistoryComplete((sessionId, messageCount) => {
+    if (suppressHistoryReplay.current) return;
+    provider.postMessage(createHistoryCompleteMessage(sessionId, messageCount));
+  });
+}
+
+/**
+ * Register the webview-side message handlers (send, cancel, session CRUD)
+ * against the ACP subprocess. Runs AFTER `initializeAcpSession` succeeds;
+ * deliberately split from history-forwarding registration so the mock
+ * fallback path can run without also receiving ACP send events.
+ */
+function setupAcpWebviewHandlers(
   provider: WebviewProvider,
   subprocess: SubprocessManager,
   manager: SessionManager,
   log: Logger,
-  responseIdRef: { current: string | null },
-  suppressHistoryReplay: { current: boolean }
+  responseIdRef: { current: string | null }
 ): void {
   const getActiveSessionId = (): string | null => {
     return manager.getActiveSessionId();
@@ -375,22 +404,6 @@ function setupAcpCommunication(
     }
     return op(clientResult.right);
   };
-
-  // When the restart flow silently reattaches an existing session the server
-  // still streams the full transcript, but the webview already holds that
-  // transcript as live messages -- forwarding the replay would just overwrite
-  // live timestamps with "Earlier" labels. Skip forwarding while the
-  // suppression flag is set; the reinit code clears it once its session/load
-  // has completed.
-  manager.onHistoryMessage(message => {
-    if (suppressHistoryReplay.current) return;
-    provider.postMessage(createHistoryMessage(message));
-  });
-
-  manager.onHistoryComplete((sessionId, messageCount) => {
-    if (suppressHistoryReplay.current) return;
-    provider.postMessage(createHistoryCompleteMessage(sessionId, messageCount));
-  });
 
   provider.onMessage(message => {
     if (isSendMessageMessage(message)) {
@@ -622,7 +635,8 @@ function subscribeSessionUpdates(
   subprocess: SubprocessManager,
   responseIdRef: { current: string | null },
   log: Logger,
-  lastSubscribedClient: { current: JsonRpcClient | null }
+  lastSubscribedClient: { current: JsonRpcClient | null },
+  suppressHistoryReplay: { current: boolean }
 ): void {
   const clientResult = subprocess.getClient();
   if (E.isLeft(clientResult)) {
@@ -644,6 +658,11 @@ function subscribeSessionUpdates(
       const responseId = responseIdRef.current;
 
       if (sessionUpdate === 'agent_message_chunk' && responseId && content?.type === 'text') {
+        // Guard against the restart race: while a session/load replay is in
+        // flight (`suppressHistoryReplay === true`), historical chunks must
+        // not be appended to an in-flight live assistant response. The load
+        // branch of SessionManager handles those chunks as history itself.
+        if (suppressHistoryReplay.current) return;
         provider.postMessage(createStreamTokenMessage(responseId, content.text, false));
       }
     }
@@ -815,7 +834,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   subprocessManager.onStatusChange(status => {
     logger?.info(`Subprocess status: ${status}`);
-    webviewProvider?.updateStatus(status);
+
+    // Never broadcast RUNNING from here: the webview must not enable send
+    // until the ACP handshake (initial or restart) has completed, otherwise
+    // the first prompt races and fails with Session not found. Both the
+    // initial activation path and the restart path below emit RUNNING
+    // inline once the handshake finishes. Other statuses (STARTING, STOPPED,
+    // ERROR) are forwarded immediately so the webview can reflect them.
+    if (status !== ProcessStatus.RUNNING) {
+      webviewProvider?.updateStatus(status);
+    }
+
+    // If the subprocess exited (restart or crash) mid-generation, close out
+    // any streaming assistant message and drop the in-flight responseId.
+    // Otherwise the webview spinner spins forever AND the next session/update
+    // from either session/load replay or the new prompt would attach to the
+    // stale id.
+    if (status !== ProcessStatus.RUNNING && responseIdRef.current && webviewProvider) {
+      webviewProvider.postMessage(createGenerationCompleteMessage(responseIdRef.current));
+      responseIdRef.current = null;
+    }
 
     if (status === ProcessStatus.ERROR) {
       vscode.window.showWarningMessage(
@@ -834,7 +872,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         subprocessManager,
         responseIdRef,
         acpLogger,
-        lastSubscribedClient
+        lastSubscribedClient,
+        suppressHistoryReplay
       );
 
       if (acpInitialized && sessionManager) {
@@ -848,9 +887,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           getWorkspaceFolder(),
           acpLogger,
           suppressHistoryReplay
-        ).catch(err => {
-          acpLogger.error('ACP re-init after restart threw:', err);
-        });
+        )
+          .then(() => {
+            // Safe to open the gate now: session is attached server-side.
+            provider.updateStatus(ProcessStatus.RUNNING);
+          })
+          .catch(err => {
+            acpLogger.error('ACP re-init after restart threw:', err);
+            provider.updateStatus(ProcessStatus.ERROR);
+          });
       }
     }
   });
@@ -869,31 +914,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     logger.info('[Mock] Mock streaming enabled (subprocess failed to start)');
   } else {
     logger.info('Subprocess started successfully');
-    webviewProvider.updateStatus(ProcessStatus.RUNNING);
 
     const clientResult = subprocessManager.getClient();
     if (E.isRight(clientResult)) {
       const client = clientResult.right;
 
-      // Wire listeners BEFORE the initial handshake. `initializeAcpSession`
-      // calls `session/load`, which replays the full transcript through
-      // `manager.onHistoryMessage` -- if no listener is registered yet those
-      // chunks are dropped and the webview ends up with an empty chat that
-      // secretly points at the restored session on the server side.
-      setupAcpCommunication(
-        webviewProvider,
-        subprocessManager,
-        sessionManager,
-        acpLogger,
-        responseIdRef,
-        suppressHistoryReplay
-      );
+      // Register the history forwarders and session/update subscriber BEFORE
+      // the handshake. `initializeAcpSession` calls `session/load`, which
+      // replays the full transcript through `manager.onHistoryMessage` -- if
+      // no listener is registered yet those chunks are dropped and the
+      // webview ends up with an empty chat that secretly points at the
+      // restored session on the server side. The webview-side message
+      // handlers (send / cancel / session CRUD) are deliberately deferred
+      // until AFTER the handshake succeeds so the mock fallback path below
+      // doesn't run alongside a duplicate ACP send handler.
+      registerHistoryForwarding(webviewProvider, sessionManager, suppressHistoryReplay);
       subscribeSessionUpdates(
         webviewProvider,
         subprocessManager,
         responseIdRef,
         acpLogger,
-        lastSubscribedClient
+        lastSubscribedClient,
+        suppressHistoryReplay
       );
 
       const session = await initializeAcpSession(
@@ -904,6 +946,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
 
       if (session) {
+        setupAcpWebviewHandlers(
+          webviewProvider,
+          subprocessManager,
+          sessionManager,
+          acpLogger,
+          responseIdRef
+        );
         // Tell the webview which session is now active so its header / session
         // list reflects the restored session instead of showing "New Session"
         // for what is actually a pre-existing conversation on the server.
@@ -911,13 +960,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           createSessionsListMessage(sessionManager.getSessions(), session.sessionId)
         );
         acpInitialized = true;
+        // Initial activation: broadcast RUNNING now that the handshake is
+        // complete. Subsequent RUNNING transitions go through the restart
+        // deferral path above.
+        webviewProvider.updateStatus(ProcessStatus.RUNNING);
         logger.info('ACP communication enabled');
       } else {
         setupMockStreaming(webviewProvider, logger.child('Mock'));
+        // Mock has its own send handler; broadcast RUNNING so the webview
+        // enables input.
+        webviewProvider.updateStatus(ProcessStatus.RUNNING);
         logger.info('[Mock] Mock streaming enabled (session initialization failed)');
       }
     } else {
       setupMockStreaming(webviewProvider, logger.child('Mock'));
+      webviewProvider.updateStatus(ProcessStatus.RUNNING);
       logger.info('[Mock] Mock streaming enabled (no client available)');
     }
   }
