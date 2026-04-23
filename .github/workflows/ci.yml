@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0 # Fetch all history for release-please
       
       - name: Run Release Please
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38  # v4.4.0
         id: release
         with:
           config-file: release-please-config.json
@@ -43,7 +43,7 @@ jobs:
       # The following steps only run if a release was created
       - name: Setup Bun
         if: steps.release.outputs.release_created
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3  # v2.1.2
         with:
           bun-version: latest
 
@@ -103,7 +103,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3  # v2.1.2
         with:
           bun-version: latest
 
