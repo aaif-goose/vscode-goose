@@ -33,17 +33,30 @@ interface PendingRequestEntry {
   readonly method: string;
   readonly resolve: (value: unknown) => void;
   readonly reject: (error: JsonRpcError | JsonRpcTimeoutError) => void;
-  readonly timer: ReturnType<typeof setTimeout>;
+  readonly timer?: ReturnType<typeof setTimeout>;
 }
 
 /** Notification callback type */
 export type NotificationCallback = (notification: JsonRpcNotification) => void;
 
+/**
+ * Per-request options.
+ *
+ * `timeoutMs` semantics:
+ *   - omitted / `undefined`: fall back to the client's constructor default
+ *   - `number`: override the default for this single request
+ *   - `null`: disable the client-side timeout for this request (never time out)
+ */
+export interface JsonRpcRequestOptions {
+  readonly timeoutMs?: number | null;
+}
+
 /** JSON-RPC client interface */
 export interface JsonRpcClient {
   readonly request: <T>(
     method: string,
-    params?: unknown
+    params?: unknown,
+    options?: JsonRpcRequestOptions
   ) => TE.TaskEither<JsonRpcError | JsonRpcTimeoutError, T>;
 
   readonly notify: (method: string, params?: unknown) => E.Either<JsonRpcParseError, void>;
@@ -75,7 +88,9 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
       if ('id' in message && message.id !== undefined) {
         const pending = pendingRequests.get(message.id);
         if (pending) {
-          clearTimeout(pending.timer);
+          if (pending.timer !== undefined) {
+            clearTimeout(pending.timer);
+          }
           pendingRequests.delete(message.id);
 
           const response = message as JsonRpcResponse;
@@ -125,7 +140,8 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
 
   const request = <T>(
     method: string,
-    params?: unknown
+    params?: unknown,
+    options?: JsonRpcRequestOptions
   ): TE.TaskEither<JsonRpcError | JsonRpcTimeoutError, T> => {
     return () =>
       new Promise(resolve => {
@@ -143,13 +159,23 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
           ...(params !== undefined && { params }),
         };
 
-        const timer = setTimeout(() => {
-          const pending = pendingRequests.get(id);
-          if (pending) {
-            pendingRequests.delete(id);
-            resolve(E.left(createJsonRpcTimeoutError(method, timeoutMs, id)));
-          }
-        }, timeoutMs);
+        // Resolve effective timeout:
+        //   - explicit `null` -> no timer (request never times out client-side)
+        //   - explicit number -> per-call override
+        //   - omitted         -> fall back to the client default
+        const effectiveTimeout =
+          options && 'timeoutMs' in options ? (options.timeoutMs ?? null) : timeoutMs;
+
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        if (effectiveTimeout !== null) {
+          timer = setTimeout(() => {
+            const pending = pendingRequests.get(id);
+            if (pending) {
+              pendingRequests.delete(id);
+              resolve(E.left(createJsonRpcTimeoutError(method, effectiveTimeout, id)));
+            }
+          }, effectiveTimeout);
+        }
 
         const entry: PendingRequestEntry = {
           id,
@@ -166,7 +192,9 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
 
         stdin.write(requestLine, err => {
           if (err) {
-            clearTimeout(timer);
+            if (timer !== undefined) {
+              clearTimeout(timer);
+            }
             pendingRequests.delete(id);
             resolve(E.left(createJsonRpcError(-32000, `Write error: ${err.message}`)));
           }
@@ -208,7 +236,9 @@ export function createJsonRpcClient(config: JsonRpcClientConfig): JsonRpcClient 
     stdout.removeListener('data', onData);
 
     for (const [id, entry] of pendingRequests) {
-      clearTimeout(entry.timer);
+      if (entry.timer !== undefined) {
+        clearTimeout(entry.timer);
+      }
       entry.reject(createJsonRpcError(-32000, 'Client disposed'));
       pendingRequests.delete(id);
     }

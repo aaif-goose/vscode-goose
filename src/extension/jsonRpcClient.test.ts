@@ -176,6 +176,29 @@ describe('createJsonRpcClient', () => {
       }
     });
 
+    test('request with timeoutMs: null never times out', async () => {
+      // Default client timeout for this describe() is 1000ms. A response pushed
+      // after 1500ms would normally fire the timeout timer; with `timeoutMs: null`
+      // the timer must not be scheduled at all.
+      const requestTask = client.request<string>('long.stream', undefined, { timeoutMs: null });
+      const requestPromise = requestTask();
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockStreams.written.length).toBe(1);
+
+      // Wait past the default timeout before responding.
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      mockStreams.pushResponse(JSON.stringify({ jsonrpc: '2.0', id: 1, result: 'late-but-valid' }));
+
+      const result = await requestPromise;
+
+      expect(E.isRight(result)).toBe(true);
+      if (E.isRight(result)) {
+        expect(result.right).toBe('late-but-valid');
+      }
+    });
+
     test('matches responses to correct pending requests', async () => {
       const request1 = client.request<string>('method1');
       const request2 = client.request<string>('method2');

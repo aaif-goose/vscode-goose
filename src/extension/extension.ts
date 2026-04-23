@@ -355,32 +355,25 @@ async function initializeAcpSession(
 
 function setupAcpCommunication(
   provider: WebviewProvider,
-  client: JsonRpcClient,
+  subprocess: SubprocessManager,
   manager: SessionManager,
-  log: Logger
+  log: Logger,
+  responseIdRef: { current: string | null }
 ): void {
-  let currentResponseId: string | null = null;
-
   const getActiveSessionId = (): string | null => {
     return manager.getActiveSessionId();
   };
 
-  client.onNotification((notification: JsonRpcNotification) => {
-    const method = notification.method;
-    const params = notification.params as AcpSessionUpdateParams | undefined;
-
-    if (method === 'session/update' && params?.update) {
-      const { sessionUpdate, content } = params.update;
-
-      if (
-        sessionUpdate === 'agent_message_chunk' &&
-        currentResponseId &&
-        content?.type === 'text'
-      ) {
-        provider.postMessage(createStreamTokenMessage(currentResponseId, content.text, false));
-      }
+  // Resolve the current client lazily on every use so that a restart
+  // (which creates a fresh JsonRpcClient inside SubprocessManager) is
+  // picked up automatically instead of binding to a stale closure.
+  const withClient = <T>(op: (client: JsonRpcClient) => T, onMissing: (err: unknown) => T): T => {
+    const clientResult = subprocess.getClient();
+    if (E.isLeft(clientResult)) {
+      return onMissing(clientResult.left);
     }
-  });
+    return op(clientResult.right);
+  };
 
   manager.onHistoryMessage(message => {
     provider.postMessage(createHistoryMessage(message));
@@ -393,7 +386,7 @@ function setupAcpCommunication(
   provider.onMessage(message => {
     if (isSendMessageMessage(message)) {
       const { content, responseId, contextChips } = message.payload;
-      currentResponseId = responseId;
+      responseIdRef.current = responseId;
       const activeSessionId = getActiveSessionId();
 
       if (!activeSessionId) {
@@ -418,10 +411,35 @@ function setupAcpCommunication(
         // Build prompt content blocks with resource links for context
         const promptBlocks = await buildPromptBlocks(content, contextChips, log);
 
-        const result = await client.request<AcpPromptResponse>('session/prompt', {
-          sessionId: activeSessionId,
-          prompt: promptBlocks,
-        })();
+        const clientResult = subprocess.getClient();
+        if (E.isLeft(clientResult)) {
+          log.error('No ACP client available:', clientResult.left);
+          provider.postMessage(
+            createErrorMessage(
+              'Message Send Failed',
+              'Goose subprocess is not running. Try "Goose: Restart".',
+              { label: 'View Logs', command: 'goose.showLogs' }
+            )
+          );
+          if (responseIdRef.current) {
+            provider.postMessage(createGenerationCancelledMessage(responseIdRef.current));
+            responseIdRef.current = null;
+          }
+          return;
+        }
+
+        // `session/prompt` streams the agent's full reply and can legitimately
+        // take far longer than the client's default request timeout. Pass
+        // `timeoutMs: null` so the client-side timer never fires; cancellation
+        // still flows through `session/cancel`.
+        const result = await clientResult.right.request<AcpPromptResponse>(
+          'session/prompt',
+          {
+            sessionId: activeSessionId,
+            prompt: promptBlocks,
+          },
+          { timeoutMs: null }
+        )();
 
         if (E.isLeft(result)) {
           log.error('ACP request failed:', result.left);
@@ -432,19 +450,19 @@ function setupAcpCommunication(
               { label: 'View Logs', command: 'goose.showLogs' }
             )
           );
-          if (currentResponseId) {
-            provider.postMessage(createGenerationCancelledMessage(currentResponseId));
-            currentResponseId = null;
+          if (responseIdRef.current) {
+            provider.postMessage(createGenerationCancelledMessage(responseIdRef.current));
+            responseIdRef.current = null;
           }
         } else {
           log.info(`Generation completed with stopReason: ${result.right.stopReason}`);
-          if (currentResponseId) {
+          if (responseIdRef.current) {
             if (result.right.stopReason === 'cancelled') {
-              provider.postMessage(createGenerationCancelledMessage(currentResponseId));
+              provider.postMessage(createGenerationCancelledMessage(responseIdRef.current));
             } else {
-              provider.postMessage(createGenerationCompleteMessage(currentResponseId));
+              provider.postMessage(createGenerationCompleteMessage(responseIdRef.current));
             }
-            currentResponseId = null;
+            responseIdRef.current = null;
           }
         }
       };
@@ -456,10 +474,17 @@ function setupAcpCommunication(
       const activeSessionId = getActiveSessionId();
       if (activeSessionId) {
         log.info('Sending cancel request to ACP');
-        const cancelResult = client.notify('session/cancel', { sessionId: activeSessionId });
-        if (E.isLeft(cancelResult)) {
-          log.error('Failed to send cancel notification:', cancelResult.left);
-        }
+        withClient(
+          client => {
+            const cancelResult = client.notify('session/cancel', { sessionId: activeSessionId });
+            if (E.isLeft(cancelResult)) {
+              log.error('Failed to send cancel notification:', cancelResult.left);
+            }
+          },
+          err => {
+            log.warn('Cannot cancel: no ACP client available', err);
+          }
+        );
       }
     }
 
@@ -515,6 +540,48 @@ function setupAcpCommunication(
   });
 
   log.info('ACP communication handler registered');
+}
+
+/**
+ * Attach the `session/update` notification handler to the current JsonRpcClient.
+ *
+ * Called once on first successful activation and again on every subsequent
+ * `ProcessStatus.RUNNING` transition (e.g. after `Goose: Restart`). A guard
+ * ref tracks the last client we subscribed to so we never double-subscribe.
+ */
+function subscribeSessionUpdates(
+  provider: WebviewProvider,
+  subprocess: SubprocessManager,
+  responseIdRef: { current: string | null },
+  log: Logger,
+  lastSubscribedClient: { current: JsonRpcClient | null }
+): void {
+  const clientResult = subprocess.getClient();
+  if (E.isLeft(clientResult)) {
+    log.debug('Skipping session/update subscription: no client available');
+    return;
+  }
+  const client = clientResult.right;
+  if (lastSubscribedClient.current === client) {
+    return;
+  }
+  lastSubscribedClient.current = client;
+
+  client.onNotification((notification: JsonRpcNotification) => {
+    const method = notification.method;
+    const params = notification.params as AcpSessionUpdateParams | undefined;
+
+    if (method === 'session/update' && params?.update) {
+      const { sessionUpdate, content } = params.update;
+      const responseId = responseIdRef.current;
+
+      if (sessionUpdate === 'agent_message_chunk' && responseId && content?.type === 'text') {
+        provider.postMessage(createStreamTokenMessage(responseId, content.text, false));
+      }
+    }
+  });
+
+  log.info('Subscribed to session/update notifications');
 }
 
 function getWorkspaceFolder(): string {
@@ -661,6 +728,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     workingDirectory: getWorkspaceFolder(),
   });
 
+  // Shared refs so the `session/update` subscriber and the webview message
+  // handler observe the same streaming response id, and so we never
+  // double-subscribe to the same JsonRpcClient instance across restarts.
+  const responseIdRef: { current: string | null } = { current: null };
+  const lastSubscribedClient: { current: JsonRpcClient | null } = { current: null };
+
+  const acpLogger = logger.child('ACP');
+
   subprocessManager.onStatusChange(status => {
     logger?.info(`Subprocess status: ${status}`);
     webviewProvider?.updateStatus(status);
@@ -668,6 +743,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (status === ProcessStatus.ERROR) {
       vscode.window.showWarningMessage(
         'Goose subprocess crashed. Use "Goose: Restart" to reconnect.'
+      );
+    }
+
+    // On every transition into RUNNING (initial start + every restart), attach
+    // the `session/update` notification handler to the newly-created client.
+    // The guard inside `subscribeSessionUpdates` prevents re-subscribing to a
+    // client we have already bound to (e.g. the initial activation pathway
+    // below will have already subscribed to the first client by the time the
+    // status listener fires).
+    if (status === ProcessStatus.RUNNING && webviewProvider && subprocessManager) {
+      subscribeSessionUpdates(
+        webviewProvider,
+        subprocessManager,
+        responseIdRef,
+        acpLogger,
+        lastSubscribedClient
       );
     }
   });
@@ -695,11 +786,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         client,
         getWorkspaceFolder(),
         sessionManager,
-        logger.child('ACP')
+        acpLogger
       );
 
       if (session) {
-        setupAcpCommunication(webviewProvider, client, sessionManager, logger.child('ACP'));
+        setupAcpCommunication(
+          webviewProvider,
+          subprocessManager,
+          sessionManager,
+          acpLogger,
+          responseIdRef
+        );
+        subscribeSessionUpdates(
+          webviewProvider,
+          subprocessManager,
+          responseIdRef,
+          acpLogger,
+          lastSubscribedClient
+        );
         logger.info('ACP communication enabled');
       } else {
         setupMockStreaming(webviewProvider, logger.child('Mock'));
