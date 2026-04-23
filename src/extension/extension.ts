@@ -422,7 +422,7 @@ function setupAcpCommunication(
             )
           );
           if (responseIdRef.current) {
-            provider.postMessage(createGenerationCancelledMessage(responseIdRef.current));
+            provider.postMessage(createGenerationCompleteMessage(responseIdRef.current));
             responseIdRef.current = null;
           }
           return;
@@ -451,7 +451,11 @@ function setupAcpCommunication(
             )
           );
           if (responseIdRef.current) {
-            provider.postMessage(createGenerationCancelledMessage(responseIdRef.current));
+            // A JSON-RPC failure is not a user- or agent-initiated cancellation.
+            // Clear the streaming state so the input unlocks, but let the error
+            // banner above carry the signal -- the `(cancelled)` label is
+            // reserved for real cancels (stop button -> stopReason: 'cancelled').
+            provider.postMessage(createGenerationCompleteMessage(responseIdRef.current));
             responseIdRef.current = null;
           }
         } else {
@@ -540,6 +544,43 @@ function setupAcpCommunication(
   });
 
   log.info('ACP communication handler registered');
+}
+
+/**
+ * Re-run the ACP handshake against the current subprocess client and reconcile
+ * session state. Called on every `ProcessStatus.RUNNING` transition AFTER the
+ * initial activation (e.g. on `Goose: Restart`). The fresh `goose acp` process
+ * does not know any of the previously-issued session ids, so `initializeAcpSession`
+ * will typically fall through to `session/new`; if that happens we notify the
+ * webview so the new session id is picked up for subsequent prompts.
+ */
+async function reinitializeAcpOnRestart(
+  provider: WebviewProvider,
+  subprocess: SubprocessManager,
+  manager: SessionManager,
+  workingDirectory: string,
+  log: Logger
+): Promise<void> {
+  const clientResult = subprocess.getClient();
+  if (E.isLeft(clientResult)) {
+    log.debug('Skipping ACP re-init: no client available');
+    return;
+  }
+
+  const previousSessionId = manager.getActiveSessionId();
+  const session = await initializeAcpSession(clientResult.right, workingDirectory, manager, log);
+
+  if (!session) {
+    log.warn('ACP re-init after restart failed to establish a session');
+    return;
+  }
+
+  const isFreshSession = session.sessionId !== previousSessionId;
+  if (isFreshSession) {
+    log.info(`ACP re-init created fresh session ${session.sessionId} after restart`);
+    provider.postMessage(createSessionCreatedMessage(session));
+  }
+  provider.postMessage(createSessionsListMessage(manager.getSessions(), session.sessionId));
 }
 
 /**
@@ -733,6 +774,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // double-subscribe to the same JsonRpcClient instance across restarts.
   const responseIdRef: { current: string | null } = { current: null };
   const lastSubscribedClient: { current: JsonRpcClient | null } = { current: null };
+  // Tracks whether the initial ACP handshake has completed. Post-restart
+  // RUNNING transitions use this to decide whether to re-run the handshake
+  // against the fresh subprocess (skip on the very first RUNNING because the
+  // activation path below runs `initializeAcpSession` inline).
+  let acpInitialized = false;
 
   const acpLogger = logger.child('ACP');
 
@@ -747,11 +793,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 
     // On every transition into RUNNING (initial start + every restart), attach
-    // the `session/update` notification handler to the newly-created client.
-    // The guard inside `subscribeSessionUpdates` prevents re-subscribing to a
-    // client we have already bound to (e.g. the initial activation pathway
-    // below will have already subscribed to the first client by the time the
-    // status listener fires).
+    // the `session/update` notification handler to the newly-created client
+    // and, if this is a RE-start (initial handshake already done), re-run the
+    // ACP handshake so the new subprocess has a live session -- otherwise the
+    // first prompt after restart fails with `-32002 Session not found`.
     if (status === ProcessStatus.RUNNING && webviewProvider && subprocessManager) {
       subscribeSessionUpdates(
         webviewProvider,
@@ -760,6 +805,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         acpLogger,
         lastSubscribedClient
       );
+
+      if (acpInitialized && sessionManager) {
+        const provider = webviewProvider;
+        const subprocess = subprocessManager;
+        const manager = sessionManager;
+        void reinitializeAcpOnRestart(
+          provider,
+          subprocess,
+          manager,
+          getWorkspaceFolder(),
+          acpLogger
+        ).catch(err => {
+          acpLogger.error('ACP re-init after restart threw:', err);
+        });
+      }
     }
   });
 
@@ -804,6 +864,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           acpLogger,
           lastSubscribedClient
         );
+        acpInitialized = true;
         logger.info('ACP communication enabled');
       } else {
         setupMockStreaming(webviewProvider, logger.child('Mock'));
