@@ -121,9 +121,22 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         timestamp: new Date(),
         status: MessageStatus.ERROR,
       };
+      // Clean up the optimistic assistant placeholder created by
+      // START_GENERATION so a failed send renders as a single error row
+      // rather than "empty assistant bubble + error". If the assistant had
+      // already streamed partial text before the failure, keep the content
+      // (marking it COMPLETE so the spinner stops) -- only drop truly empty
+      // placeholders.
+      const cleaned = state.messages.flatMap(msg => {
+        if (msg.role !== MessageRole.ASSISTANT || msg.status !== MessageStatus.STREAMING) {
+          return [msg];
+        }
+        if (msg.content === '') return [];
+        return [{ ...msg, status: MessageStatus.COMPLETE }];
+      });
       return {
         ...state,
-        messages: [...state.messages, errorMessage],
+        messages: [...cleaned, errorMessage],
         isGenerating: false,
         currentResponseId: null,
       };

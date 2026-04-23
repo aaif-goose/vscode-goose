@@ -436,6 +436,9 @@ function setupAcpWebviewHandlers(
         const clientResult = subprocess.getClient();
         if (E.isLeft(clientResult)) {
           log.error('No ACP client available:', clientResult.left);
+          // The webview's ADD_ERROR_MESSAGE reducer cleans up the optimistic
+          // assistant placeholder, so we don't need to also post
+          // GENERATION_COMPLETE here (which would leave a blank bubble).
           provider.postMessage(
             createErrorMessage(
               'Message Send Failed',
@@ -443,10 +446,7 @@ function setupAcpWebviewHandlers(
               { label: 'View Logs', command: 'goose.showLogs' }
             )
           );
-          if (responseIdRef.current) {
-            provider.postMessage(createGenerationCompleteMessage(responseIdRef.current));
-            responseIdRef.current = null;
-          }
+          responseIdRef.current = null;
           return;
         }
 
@@ -465,6 +465,10 @@ function setupAcpWebviewHandlers(
 
         if (E.isLeft(result)) {
           log.error('ACP request failed:', result.left);
+          // The webview's ADD_ERROR_MESSAGE reducer drops the empty assistant
+          // placeholder (or marks a partially-streamed one complete) and
+          // resets isGenerating. No GENERATION_COMPLETE needed -- sending
+          // both would leave a blank bubble above the error row.
           provider.postMessage(
             createErrorMessage(
               'Message Send Failed',
@@ -472,14 +476,7 @@ function setupAcpWebviewHandlers(
               { label: 'View Logs', command: 'goose.showLogs' }
             )
           );
-          if (responseIdRef.current) {
-            // A JSON-RPC failure is not a user- or agent-initiated cancellation.
-            // Clear the streaming state so the input unlocks, but let the error
-            // banner above carry the signal -- the `(cancelled)` label is
-            // reserved for real cancels (stop button -> stopReason: 'cancelled').
-            provider.postMessage(createGenerationCompleteMessage(responseIdRef.current));
-            responseIdRef.current = null;
-          }
+          responseIdRef.current = null;
         } else {
           log.info(`Generation completed with stopReason: ${result.right.stopReason}`);
           if (responseIdRef.current) {
@@ -845,15 +842,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       webviewProvider?.updateStatus(status);
     }
 
-    // If the subprocess exited (restart or crash) mid-generation, close out
-    // any streaming assistant message and drop the in-flight responseId.
-    // Otherwise the webview spinner spins forever AND the next session/update
-    // from either session/load replay or the new prompt would attach to the
-    // stale id.
-    if (status !== ProcessStatus.RUNNING && responseIdRef.current && webviewProvider) {
-      webviewProvider.postMessage(createGenerationCompleteMessage(responseIdRef.current));
-      responseIdRef.current = null;
-    }
+    // Note: we deliberately do NOT close out the streaming assistant bubble
+    // or null `responseIdRef` here. When the subprocess dies mid-generation,
+    // `JsonRpcClient.dispose()` rejects every pending request; the
+    // `sendRequest` error path then runs, posts an `ErrorMessage`, and
+    // `ADD_ERROR_MESSAGE` in the webview reducer removes the optimistic
+    // placeholder. Handling the cleanup from two places would race to post
+    // both a COMPLETE and an ERROR for the same bubble.
 
     if (status === ProcessStatus.ERROR) {
       vscode.window.showWarningMessage(
