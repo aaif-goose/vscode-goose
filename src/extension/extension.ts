@@ -567,6 +567,15 @@ async function reinitializeAcpOnRestart(
     return;
   }
 
+  // The webview still holds the live messages from before the restart. If the
+  // fresh subprocess can `session/load` the prior session, history replay
+  // would append every historical message on top of those live copies and
+  // show each turn twice. If it falls through to `session/new`, the live
+  // messages belong to a dead session id and are no longer meaningful.
+  // Either way, clear the transcript before the handshake so the post-restart
+  // view reflects the true server-side state.
+  provider.postMessage(createChatHistoryMessage([]));
+
   const previousSessionId = manager.getActiveSessionId();
   const session = await initializeAcpSession(clientResult.right, workingDirectory, manager, log);
 
