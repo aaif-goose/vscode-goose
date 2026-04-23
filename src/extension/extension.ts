@@ -874,6 +874,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const clientResult = subprocessManager.getClient();
     if (E.isRight(clientResult)) {
       const client = clientResult.right;
+
+      // Wire listeners BEFORE the initial handshake. `initializeAcpSession`
+      // calls `session/load`, which replays the full transcript through
+      // `manager.onHistoryMessage` -- if no listener is registered yet those
+      // chunks are dropped and the webview ends up with an empty chat that
+      // secretly points at the restored session on the server side.
+      setupAcpCommunication(
+        webviewProvider,
+        subprocessManager,
+        sessionManager,
+        acpLogger,
+        responseIdRef,
+        suppressHistoryReplay
+      );
+      subscribeSessionUpdates(
+        webviewProvider,
+        subprocessManager,
+        responseIdRef,
+        acpLogger,
+        lastSubscribedClient
+      );
+
       const session = await initializeAcpSession(
         client,
         getWorkspaceFolder(),
@@ -882,20 +904,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       );
 
       if (session) {
-        setupAcpCommunication(
-          webviewProvider,
-          subprocessManager,
-          sessionManager,
-          acpLogger,
-          responseIdRef,
-          suppressHistoryReplay
-        );
-        subscribeSessionUpdates(
-          webviewProvider,
-          subprocessManager,
-          responseIdRef,
-          acpLogger,
-          lastSubscribedClient
+        // Tell the webview which session is now active so its header / session
+        // list reflects the restored session instead of showing "New Session"
+        // for what is actually a pre-existing conversation on the server.
+        webviewProvider.postMessage(
+          createSessionsListMessage(sessionManager.getSessions(), session.sessionId)
         );
         acpInitialized = true;
         logger.info('ACP communication enabled');
