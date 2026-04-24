@@ -27,7 +27,7 @@ See Goose think in real-time. Responses stream token-by-token with syntax-highli
 ## Requirements
 
 - **VS Code 1.95.0+**
-- **Goose Desktop 1.16.0+** — [Install Goose](https://block.github.io/goose/)
+- **Goose CLI 1.16.0+** — [Install Goose](https://block.github.io/goose/) and ensure `goose --version` works from your command line.
 
 ## Installation
 

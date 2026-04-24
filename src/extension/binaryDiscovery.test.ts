@@ -225,10 +225,10 @@ describe('binaryDiscovery', () => {
 
     describe('darwin platform', () => {
       test('searches darwin-specific paths', () => {
-        addExistingPath('/Applications/Goose.app/Contents/MacOS/goose');
+        addExistingPath('/usr/local/bin/goose');
 
         const result = findInPlatformPaths('darwin', homeDir, env);
-        expect(result).toBe('/Applications/Goose.app/Contents/MacOS/goose');
+        expect(result).toBe('/usr/local/bin/goose');
       });
 
       test('returns first found path in priority order', () => {
@@ -236,8 +236,6 @@ describe('binaryDiscovery', () => {
         addExistingPath('/usr/local/bin/goose');
 
         const result = findInPlatformPaths('darwin', homeDir, env);
-        // ~/.local/bin comes after /Applications/Goose.app in darwin paths
-        // So if only these two exist, it should return the first in the list
         expect(result).toBe('/home/testuser/.local/bin/goose');
       });
 
@@ -320,7 +318,7 @@ describe('binaryDiscovery', () => {
           homeDir,
         };
         addExistingPath('/custom/path/goose');
-        addExistingPath('/Applications/Goose.app/Contents/MacOS/goose');
+        addExistingPath('/home/testuser/.local/bin/goose');
 
         const result = discoverBinary(config);
         expect(E.isRight(result)).toBe(true);
@@ -337,7 +335,7 @@ describe('binaryDiscovery', () => {
           homeDir,
         };
         addExistingPath('/usr/local/bin/goose');
-        addExistingPath('/Applications/Goose.app/Contents/MacOS/goose');
+        addExistingPath('/home/testuser/.local/bin/goose');
 
         const result = discoverBinary(config);
         expect(E.isRight(result)).toBe(true);
@@ -353,12 +351,12 @@ describe('binaryDiscovery', () => {
           env: { ...env, PATH: '' },
           homeDir,
         };
-        addExistingPath('/Applications/Goose.app/Contents/MacOS/goose');
+        addExistingPath('/home/testuser/.local/bin/goose');
 
         const result = discoverBinary(config);
         expect(E.isRight(result)).toBe(true);
         if (E.isRight(result)) {
-          expect(result.right).toBe('/Applications/Goose.app/Contents/MacOS/goose');
+          expect(result.right).toBe('/home/testuser/.local/bin/goose');
         }
       });
 
@@ -505,13 +503,26 @@ describe('binaryDiscovery', () => {
           env: {},
           homeDir,
         };
-        addExistingPath('/Applications/Goose.app/Contents/MacOS/goose');
+        addExistingPath('/usr/local/bin/goose');
 
         const result = discoverBinary(config);
         expect(E.isRight(result)).toBe(true);
         if (E.isRight(result)) {
-          expect(result.right).toBe('/Applications/Goose.app/Contents/MacOS/goose');
+          expect(result.right).toBe('/usr/local/bin/goose');
         }
+      });
+
+      test('does not discover the macOS desktop app executable as a CLI binary', () => {
+        const config: BinaryDiscoveryConfig = {
+          userConfiguredPath: undefined,
+          platform: 'darwin',
+          env: { ...env, PATH: '' },
+          homeDir,
+        };
+        addExistingPath('/Applications/Goose.app/Contents/MacOS/goose');
+
+        const result = discoverBinary(config);
+        expect(E.isLeft(result)).toBe(true);
       });
     });
   });
@@ -550,8 +561,8 @@ describe('binaryDiscovery', () => {
       };
 
       const paths = getAllSearchPaths(config);
-      expect(paths).toContain('/Applications/Goose.app/Contents/MacOS/goose');
       expect(paths).toContain('/home/testuser/.local/bin/goose');
+      expect(paths).toContain('/usr/local/bin/goose');
     });
 
     test('expands tilde in returned paths', () => {
