@@ -15,12 +15,7 @@ import { BinaryDiscoveryConfig } from '../shared/types';
 // ============================================================================
 
 const SEARCH_PATHS: Partial<Record<NodeJS.Platform, readonly string[]>> = {
-  darwin: [
-    '/Applications/Goose.app/Contents/MacOS/goose',
-    '~/.local/bin/goose',
-    '/usr/local/bin/goose',
-    '/opt/homebrew/bin/goose',
-  ],
+  darwin: ['~/.local/bin/goose', '/usr/local/bin/goose', '/opt/homebrew/bin/goose'],
   win32: ['%LOCALAPPDATA%\\Goose\\goose.exe', '%PROGRAMFILES%\\Goose\\goose.exe'],
   linux: [
     '~/.local/bin/goose',
