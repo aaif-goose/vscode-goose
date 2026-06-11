@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/aaif-goose/vscode-goose/compare/v0.2.1...v0.2.2) (2026-06-11)
+
+
+### Bug Fixes
+
+* avoid macOS Goose desktop binary autodiscovery ([#41](https://github.com/aaif-goose/vscode-goose/issues/41)) ([ac80506](https://github.com/aaif-goose/vscode-goose/commit/ac80506db3d7a3543b5726fd8851a42ea7ad44a6)), closes [#42](https://github.com/aaif-goose/vscode-goose/issues/42)
+* stop treating long session/prompt streams as cancelled ([#33](https://github.com/aaif-goose/vscode-goose/issues/33)) ([#40](https://github.com/aaif-goose/vscode-goose/issues/40)) ([dde0e05](https://github.com/aaif-goose/vscode-goose/commit/dde0e0567e0981c67ef3f050e7687b6e94404260))
+
 ## [0.2.1](https://github.com/block/vscode-goose/compare/v0.2.0...v0.2.1) (2025-12-21)
 
 
