@@ -27,7 +27,6 @@ import {
   expandPath,
   findInPath,
   findInPlatformPaths,
-  getAllSearchPaths,
 } from './binaryDiscovery';
 
 describe('binaryDiscovery', () => {
@@ -344,7 +343,7 @@ describe('binaryDiscovery', () => {
         }
       });
 
-      test('falls back to platform paths when user config and PATH fail', () => {
+      test('does not fall back to platform paths when configured path is invalid', () => {
         const config: BinaryDiscoveryConfig = {
           userConfiguredPath: '/nonexistent/goose',
           platform: 'darwin',
@@ -354,9 +353,10 @@ describe('binaryDiscovery', () => {
         addExistingPath('/home/testuser/.local/bin/goose');
 
         const result = discoverBinary(config);
-        expect(E.isRight(result)).toBe(true);
-        if (E.isRight(result)) {
-          expect(result.right).toBe('/home/testuser/.local/bin/goose');
+        expect(E.isLeft(result)).toBe(true);
+        if (E.isLeft(result)) {
+          expect(result.left._tag).toBe('BinaryNotFoundError');
+          expect(result.left.configuredPath).toBe('/nonexistent/goose');
         }
       });
 
@@ -373,6 +373,57 @@ describe('binaryDiscovery', () => {
         expect(E.isRight(result)).toBe(true);
         if (E.isRight(result)) {
           expect(result.right).toBe('/opt/homebrew/bin/goose');
+        }
+      });
+    });
+
+    describe('invalid configured path', () => {
+      test('returns Left with configured path when configured path is invalid, even when PATH has goose', () => {
+        const config: BinaryDiscoveryConfig = {
+          userConfiguredPath: '/custom/missing/goose',
+          platform: 'darwin',
+          env,
+          homeDir,
+        };
+        addExistingPath('/usr/local/bin/goose');
+
+        const result = discoverBinary(config);
+        expect(E.isLeft(result)).toBe(true);
+        if (E.isLeft(result)) {
+          expect(result.left._tag).toBe('BinaryNotFoundError');
+          expect(result.left.configuredPath).toBe('/custom/missing/goose');
+        }
+      });
+
+      test('names the expanded configured path in the error', () => {
+        const config: BinaryDiscoveryConfig = {
+          userConfiguredPath: '~/missing/goose',
+          platform: 'darwin',
+          env,
+          homeDir,
+        };
+
+        const result = discoverBinary(config);
+        expect(E.isLeft(result)).toBe(true);
+        if (E.isLeft(result)) {
+          expect(result.left.configuredPath).toBe('/home/testuser/missing/goose');
+          expect(result.left.message).toContain('/home/testuser/missing/goose');
+        }
+      });
+
+      test('treats whitespace-only configured path as unset and proceeds with auto-discovery', () => {
+        const config: BinaryDiscoveryConfig = {
+          userConfiguredPath: '   ',
+          platform: 'darwin',
+          env,
+          homeDir,
+        };
+        addExistingPath('/usr/local/bin/goose');
+
+        const result = discoverBinary(config);
+        expect(E.isRight(result)).toBe(true);
+        if (E.isRight(result)) {
+          expect(result.right).toBe('/usr/local/bin/goose');
         }
       });
     });
@@ -524,57 +575,6 @@ describe('binaryDiscovery', () => {
         const result = discoverBinary(config);
         expect(E.isLeft(result)).toBe(true);
       });
-    });
-  });
-
-  describe('getAllSearchPaths', () => {
-    test('includes user configured path when present', () => {
-      const config: BinaryDiscoveryConfig = {
-        userConfiguredPath: '/custom/goose',
-        platform: 'darwin',
-        env: {},
-        homeDir: '/home/testuser',
-      };
-
-      const paths = getAllSearchPaths(config);
-      expect(paths).toContain('/custom/goose');
-    });
-
-    test('includes PATH environment variable placeholder', () => {
-      const config: BinaryDiscoveryConfig = {
-        userConfiguredPath: undefined,
-        platform: 'darwin',
-        env: {},
-        homeDir: '/home/testuser',
-      };
-
-      const paths = getAllSearchPaths(config);
-      expect(paths).toContain('PATH environment variable');
-    });
-
-    test('includes platform-specific paths', () => {
-      const config: BinaryDiscoveryConfig = {
-        userConfiguredPath: undefined,
-        platform: 'darwin',
-        env: {},
-        homeDir: '/home/testuser',
-      };
-
-      const paths = getAllSearchPaths(config);
-      expect(paths).toContain('/home/testuser/.local/bin/goose');
-      expect(paths).toContain('/usr/local/bin/goose');
-    });
-
-    test('expands tilde in returned paths', () => {
-      const config: BinaryDiscoveryConfig = {
-        userConfiguredPath: '~/.local/bin/goose',
-        platform: 'darwin',
-        env: {},
-        homeDir: '/home/testuser',
-      };
-
-      const paths = getAllSearchPaths(config);
-      expect(paths[0]).toBe('/home/testuser/.local/bin/goose');
     });
   });
 });

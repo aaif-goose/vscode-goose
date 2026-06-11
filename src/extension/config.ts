@@ -17,6 +17,7 @@ export function getGooseBinaryPath(): O.Option<string> {
   return pipe(
     path,
     O.fromNullable,
+    O.map(p => p.trim()),
     O.filter(p => p.length > 0)
   );
 }

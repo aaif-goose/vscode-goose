@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  createVersionStatusMessage,
   buildErrorBlockContent,
   isSendMessageMessage,
   isStatusUpdateMessage,
@@ -81,6 +82,18 @@ describe('isSendMessageMessage', () => {
 
   test('returns false for undefined', () => {
     expect(isSendMessageMessage(undefined)).toBe(false);
+  });
+});
+
+describe('createVersionStatusMessage', () => {
+  test('carries configuredPath in blocked_missing payload when provided', () => {
+    const msg = createVersionStatusMessage('blocked_missing', '1.16.0', {
+      installUrl: 'https://example.com/install',
+      configuredPath: '/bad/path/goose',
+    });
+    expect(msg.type).toBe(WebviewMessageType.VERSION_STATUS);
+    expect(msg.payload.status).toBe('blocked_missing');
+    expect(msg.payload.configuredPath).toBe('/bad/path/goose');
   });
 });
 

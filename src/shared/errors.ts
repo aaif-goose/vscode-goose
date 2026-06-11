@@ -16,6 +16,8 @@ export interface BinaryNotFoundError extends BaseError {
   readonly searchedPaths: readonly string[];
   readonly platform: NodeJS.Platform;
   readonly installationUrl: string;
+  /** Set when `goose.binaryPath` is explicitly configured but invalid (expanded path) */
+  readonly configuredPath?: string;
 }
 
 /** Error when the subprocess fails to spawn */
@@ -73,8 +75,8 @@ export type GooseError =
   | JsonRpcError
   | VersionMismatchError;
 
-const INSTALLATION_URL = 'https://block.github.io/goose';
-const UPDATE_URL = 'https://block.github.io/goose/docs/guides/updating-goose/';
+const INSTALLATION_URL = 'https://goose-docs.ai/docs/quickstart/';
+const UPDATE_URL = 'https://goose-docs.ai/docs/guides/updating-goose/';
 
 /** Create a BinaryNotFoundError */
 export function createBinaryNotFoundError(
@@ -88,6 +90,22 @@ export function createBinaryNotFoundError(
     searchedPaths,
     platform,
     installationUrl: INSTALLATION_URL,
+  };
+}
+
+/** Create a BinaryNotFoundError for an explicitly configured but invalid `goose.binaryPath` */
+export function createConfiguredPathInvalidError(
+  configuredPath: string,
+  platform: NodeJS.Platform
+): BinaryNotFoundError {
+  return {
+    _tag: 'BinaryNotFoundError',
+    message: `Configured Goose binary path not found: ${configuredPath}`,
+    timestamp: new Date(),
+    searchedPaths: [configuredPath],
+    platform,
+    installationUrl: INSTALLATION_URL,
+    configuredPath,
   };
 }
 
@@ -243,6 +261,13 @@ export function isVersionMismatchError(error: GooseError): error is VersionMisma
 export function formatError(error: GooseError): string {
   switch (error._tag) {
     case 'BinaryNotFoundError':
+      if (error.configuredPath !== undefined) {
+        return (
+          `Goose binary not found at the configured path: ${error.configuredPath}\n` +
+          `Fix the "goose.binaryPath" setting, or clear it to use auto-detection, ` +
+          `then reload the window.`
+        );
+      }
       return (
         `Goose binary not found.\n` +
         `Searched paths:\n${error.searchedPaths.map(p => `  - ${p}`).join('\n')}\n` +

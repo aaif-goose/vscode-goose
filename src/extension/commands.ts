@@ -6,6 +6,7 @@ import * as E from 'fp-ts/Either';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ContextChip } from '../shared/contextTypes';
+import { formatError } from '../shared/errors';
 import { createAddContextChipMessage, createFocusChatInputMessage } from '../shared/messages';
 import { discoverBinary } from './binaryDiscovery';
 import { getBinaryDiscoveryConfig } from './config';
@@ -49,7 +50,9 @@ export function registerCommands(
 
       const binaryResult = discoverBinary(getBinaryDiscoveryConfig());
       if (E.isLeft(binaryResult)) {
-        vscode.window.showErrorMessage('Cannot restart: Goose binary not found.');
+        vscode.window.showErrorMessage(
+          `Cannot restart: ${formatError(binaryResult.left).replace(/\n\s*/g, ' ')}`
+        );
         return;
       }
 
