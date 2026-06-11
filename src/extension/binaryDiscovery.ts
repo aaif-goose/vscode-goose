@@ -7,7 +7,13 @@ import * as E from 'fp-ts/Either';
 import { pipe } from 'fp-ts/function';
 import * as fs from 'fs';
 import * as path from 'path';
-import { BinaryNotFoundError, createBinaryNotFoundError, toLeft, toRight } from '../shared/errors';
+import {
+  BinaryNotFoundError,
+  createBinaryNotFoundError,
+  createConfiguredPathInvalidError,
+  toLeft,
+  toRight,
+} from '../shared/errors';
 import { BinaryDiscoveryConfig } from '../shared/types';
 
 // ============================================================================
@@ -105,19 +111,26 @@ export function findInPlatformPaths(
 // Main Discovery Function
 // ============================================================================
 
-/** Discover the goose binary path */
+/**
+ * Discover the goose binary path.
+ *
+ * An explicitly configured `goose.binaryPath` is authoritative: if it is set
+ * (non-empty after trimming) but invalid, discovery fails immediately rather
+ * than silently falling back to PATH or platform search. A whitespace-only
+ * configured path is treated as unset, so auto-discovery proceeds.
+ */
 export function discoverBinary(
   config: BinaryDiscoveryConfig
 ): E.Either<BinaryNotFoundError, string> {
   const searchedPaths: string[] = [];
 
-  return pipe(config.userConfiguredPath, userPath => {
-    if (userPath !== undefined) {
+  return pipe(config.userConfiguredPath?.trim(), userPath => {
+    if (userPath !== undefined && userPath.length > 0) {
       const expanded = expandPath(userPath, config.homeDir, config.env);
-      searchedPaths.push(expanded);
       if (checkPathExists(expanded)) {
         return toRight(expanded);
       }
+      return toLeft(createConfiguredPathInvalidError(expanded, config.platform));
     }
 
     const pathResult = findInPath(config.env);

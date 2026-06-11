@@ -66,6 +66,7 @@ export function App() {
         minimumVersion={versionStatus.minimumVersion}
         installUrl={versionStatus.installUrl}
         updateUrl={versionStatus.updateUrl}
+        configuredPath={versionStatus.configuredPath}
       />
     );
   }

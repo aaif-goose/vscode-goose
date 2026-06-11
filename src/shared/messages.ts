@@ -192,6 +192,8 @@ export interface VersionStatusPayload {
   readonly minimumVersion: string;
   readonly installUrl?: string;
   readonly updateUrl?: string;
+  /** Set under `blocked_missing` when `goose.binaryPath` is configured but invalid */
+  readonly configuredPath?: string;
 }
 
 // Context Chip Payloads
@@ -476,6 +478,7 @@ export function createVersionStatusMessage(
     detectedVersion?: string;
     installUrl?: string;
     updateUrl?: string;
+    configuredPath?: string;
   }
 ): WebviewMessage<WebviewMessageType.VERSION_STATUS> {
   return {
@@ -486,6 +489,7 @@ export function createVersionStatusMessage(
       detectedVersion: options?.detectedVersion,
       installUrl: options?.installUrl,
       updateUrl: options?.updateUrl,
+      configuredPath: options?.configuredPath,
     },
   };
 }

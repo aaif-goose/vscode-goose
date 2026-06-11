@@ -5,6 +5,7 @@
 
 import { createOpenExternalLinkMessage } from '../../shared/messages';
 import { postMessage } from '../bridge';
+import { GOOSE_PATH } from './icons/GooseWatermark';
 
 export interface VersionBlockedViewProps {
   status: 'blocked_missing' | 'blocked_outdated';
@@ -12,6 +13,8 @@ export interface VersionBlockedViewProps {
   minimumVersion: string;
   installUrl?: string;
   updateUrl?: string;
+  /** Set when `goose.binaryPath` is configured but invalid */
+  configuredPath?: string;
 }
 
 export function VersionBlockedView({
@@ -20,10 +23,38 @@ export function VersionBlockedView({
   minimumVersion,
   installUrl,
   updateUrl,
+  configuredPath,
 }: VersionBlockedViewProps) {
   const handleLinkClick = (url: string) => {
     postMessage(createOpenExternalLinkMessage(url));
   };
+
+  if (status === 'blocked_missing' && configuredPath) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen p-6">
+        <div className="max-w-md text-center">
+          <WarningIcon className="w-12 h-12 mx-auto mb-4 text-[var(--vscode-editorWarning-foreground)]" />
+          <h2 className="text-lg font-medium text-[var(--vscode-foreground)] mb-3">
+            Goose Binary Path Invalid
+          </h2>
+          <p className="text-sm text-[var(--vscode-descriptionForeground)] mb-2">
+            The configured path{' '}
+            <code className="font-mono text-[var(--vscode-textPreformat-foreground)] break-all">
+              {configuredPath}
+            </code>{' '}
+            does not exist or is not executable.
+          </p>
+          <p className="text-sm text-[var(--vscode-descriptionForeground)]">
+            Fix the{' '}
+            <code className="font-mono text-[var(--vscode-textPreformat-foreground)]">
+              goose.binaryPath
+            </code>{' '}
+            setting, or clear it to use auto-detection, then reload the window to search again.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (status === 'blocked_missing') {
     return (
@@ -85,6 +116,14 @@ export function VersionBlockedView({
 
 function GooseIcon({ className }: { className?: string }) {
   return (
+    <svg className={className} viewBox="0 0 16 16" aria-hidden="true">
+      <path d={GOOSE_PATH} fill="currentColor" />
+    </svg>
+  );
+}
+
+function WarningIcon({ className }: { className?: string }) {
+  return (
     <svg
       className={className}
       viewBox="0 0 24 24"
@@ -95,9 +134,9 @@ function GooseIcon({ className }: { className?: string }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M12 3c-1.5 0-2.5 1-3 2-1 0-2 .5-2.5 1.5S6 8.5 6 10c0 1 .5 2 1 2.5-.5 1-1 2.5-1 4 0 2.5 2 4.5 6 4.5s6-2 6-4.5c0-1.5-.5-3-1-4 .5-.5 1-1.5 1-2.5 0-1.5-.5-2.5-1-3.5s-1.5-1.5-2.5-1.5c-.5-1-1.5-2-3-2z" />
-      <circle cx="10" cy="10" r="1" fill="currentColor" />
-      <circle cx="14" cy="10" r="1" fill="currentColor" />
+      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   );
 }
