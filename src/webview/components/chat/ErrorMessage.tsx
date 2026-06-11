@@ -1,11 +1,11 @@
+import { FALLBACK_ERROR_BLOCK_CONTENT } from '../../../shared/messages';
+
 interface ErrorMessageProps {
   content: string;
   timestamp?: Date;
   onRetry?: (content: string) => void;
   originalContent?: string;
 }
-
-const FALLBACK_ERROR_TEXT = 'Something went wrong. Check the Goose output log for details.';
 
 function formatTime(date?: Date): string {
   if (!date) return 'Earlier';
@@ -14,7 +14,7 @@ function formatTime(date?: Date): string {
 
 export function ErrorMessage({ content, timestamp, onRetry, originalContent }: ErrorMessageProps) {
   const canRetry = onRetry && originalContent;
-  const displayContent = content.trim() ? content : FALLBACK_ERROR_TEXT;
+  const displayContent = content.trim() ? content : FALLBACK_ERROR_BLOCK_CONTENT;
 
   return (
     <div className="flex flex-col items-start">

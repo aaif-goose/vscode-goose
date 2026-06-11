@@ -92,7 +92,8 @@ export interface ErrorPayload {
   };
 }
 
-const FALLBACK_ERROR_BLOCK_CONTENT = 'Something went wrong';
+export const FALLBACK_ERROR_BLOCK_CONTENT =
+  'Something went wrong. Check the Goose output log for details.';
 
 /**
  * Build the chat error-block text for an ERROR payload.

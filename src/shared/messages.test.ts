@@ -137,7 +137,11 @@ describe('buildErrorBlockContent', () => {
   });
 
   test('returns static fallback when both title and message are blank', () => {
-    expect(buildErrorBlockContent({ title: '', message: '' })).toBe('Something went wrong');
-    expect(buildErrorBlockContent({ title: '  ', message: ' ' })).toBe('Something went wrong');
+    expect(buildErrorBlockContent({ title: '', message: '' })).toBe(
+      'Something went wrong. Check the Goose output log for details.'
+    );
+    expect(buildErrorBlockContent({ title: '  ', message: ' ' })).toBe(
+      'Something went wrong. Check the Goose output log for details.'
+    );
   });
 });
