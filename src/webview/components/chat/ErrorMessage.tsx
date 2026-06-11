@@ -5,6 +5,8 @@ interface ErrorMessageProps {
   originalContent?: string;
 }
 
+const FALLBACK_ERROR_TEXT = 'Something went wrong. Check the Goose output log for details.';
+
 function formatTime(date?: Date): string {
   if (!date) return 'Earlier';
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -12,6 +14,7 @@ function formatTime(date?: Date): string {
 
 export function ErrorMessage({ content, timestamp, onRetry, originalContent }: ErrorMessageProps) {
   const canRetry = onRetry && originalContent;
+  const displayContent = content.trim() ? content : FALLBACK_ERROR_TEXT;
 
   return (
     <div className="flex flex-col items-start">
@@ -19,7 +22,7 @@ export function ErrorMessage({ content, timestamp, onRetry, originalContent }: E
         <div className="flex items-start gap-2">
           <ErrorIcon className="w-4 h-4 text-[var(--vscode-errorForeground)] shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-[var(--vscode-errorForeground)] text-sm">{content}</p>
+            <p className="text-[var(--vscode-errorForeground)] text-sm">{displayContent}</p>
             {canRetry && (
               <button
                 onClick={() => onRetry(originalContent)}

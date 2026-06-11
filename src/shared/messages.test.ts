@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildErrorBlockContent,
   isSendMessageMessage,
   isStatusUpdateMessage,
   isVersionStatusMessage,
@@ -102,5 +103,41 @@ describe('isVersionStatusMessage', () => {
 
   test('returns false for malformed object', () => {
     expect(isVersionStatusMessage({ wrongField: 'value' })).toBe(false);
+  });
+});
+
+describe('buildErrorBlockContent', () => {
+  test('joins title and message with a colon', () => {
+    const content = buildErrorBlockContent({
+      title: 'Message Send Failed',
+      message: 'Failed to send message: Internal error — Missing provider',
+    });
+
+    expect(content).toBe(
+      'Message Send Failed: Failed to send message: Internal error — Missing provider'
+    );
+  });
+
+  test('returns title when message is empty', () => {
+    expect(buildErrorBlockContent({ title: 'Message Send Failed', message: '' })).toBe(
+      'Message Send Failed'
+    );
+  });
+
+  test('returns title when message is whitespace', () => {
+    expect(buildErrorBlockContent({ title: 'Message Send Failed', message: '   ' })).toBe(
+      'Message Send Failed'
+    );
+  });
+
+  test('returns message when title is empty', () => {
+    expect(buildErrorBlockContent({ title: '', message: 'Something failed' })).toBe(
+      'Something failed'
+    );
+  });
+
+  test('returns static fallback when both title and message are blank', () => {
+    expect(buildErrorBlockContent({ title: '', message: '' })).toBe('Something went wrong');
+    expect(buildErrorBlockContent({ title: '  ', message: ' ' })).toBe('Something went wrong');
   });
 });
