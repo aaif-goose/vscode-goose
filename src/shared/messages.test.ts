@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  createVersionStatusMessage,
   buildErrorBlockContent,
+  createVersionStatusMessage,
   isSendMessageMessage,
   isStatusUpdateMessage,
   isVersionStatusMessage,
