@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.3](https://github.com/aaif-goose/vscode-goose/compare/v0.2.2...v0.2.3) (2026-06-11)
+
+
+### Bug Fixes
+
+* allow Goose Restart to recover from blocked activation ([#51](https://github.com/aaif-goose/vscode-goose/issues/51)) ([60c32f1](https://github.com/aaif-goose/vscode-goose/commit/60c32f19ecad4eee598bb2d8b1c4696bc7a337ef)), closes [#48](https://github.com/aaif-goose/vscode-goose/issues/48)
+* fail loudly when configured goose.binaryPath is invalid ([#50](https://github.com/aaif-goose/vscode-goose/issues/50)) ([3c959f3](https://github.com/aaif-goose/vscode-goose/commit/3c959f3760e54f7ef84f2976cda11f6d4df0d758))
+* surface ACP error details and prevent blank chat error blocks ([#49](https://github.com/aaif-goose/vscode-goose/issues/49)) ([11bb120](https://github.com/aaif-goose/vscode-goose/commit/11bb12039e32f92da4f9cb0465a4ff795515e99e))
+
 ## [0.2.2](https://github.com/aaif-goose/vscode-goose/compare/v0.2.1...v0.2.2) (2026-06-11)
 
 
