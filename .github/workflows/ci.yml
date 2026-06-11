@@ -3,7 +3,7 @@ name: CI - Main & Release
 # This workflow handles:
 # 1. Running release-please on pushes to main
 # 2. Running tests on pushes to main
-# 3. Building and publishing releases on tag pushes
+# 3. Packaging a .vsix and uploading it to the GitHub Release when release-please creates one
 
 permissions:
   contents: write # Needed for release job & release-please
@@ -63,35 +63,13 @@ jobs:
 
       - name: Package Extension
         if: steps.release.outputs.release_created
-        run: |
-          mkdir -p dist
-          VERSION="${{ steps.release.outputs.tag_name }}"
-          VERSION="${VERSION#vscode-v}"  # Remove vscode-v prefix
-          PACKAGE_FILENAME="dist/vscode-goose-${VERSION}.vsix"
-          npx @vscode/vsce package --no-yarn --no-dependencies -o "$PACKAGE_FILENAME"
-          if [ ! -f "$PACKAGE_FILENAME" ]; then
-            echo "Failed to create the VSIX package: $PACKAGE_FILENAME"
-            exit 1
-          fi
-          ls -l dist
+        run: bunx @vscode/vsce package --no-dependencies
 
       - name: Upload Release Assets
         if: steps.release.outputs.release_created
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload ${{ steps.release.outputs.tag_name }} dist/*.vsix
-
-      - name: Publish to VS Code Marketplace
-        if: steps.release.outputs.release_created && env.VSCE_PAT != null
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: |
-          VERSION="${{ steps.release.outputs.tag_name }}"
-          VERSION="${VERSION#vscode-v}"  # Remove vscode-v prefix
-          PACKAGE_FILENAME="dist/vscode-goose-${VERSION}.vsix"
-          echo "Publishing $PACKAGE_FILENAME to VS Code Marketplace..."
-          npx @vscode/vsce publish --packagePath "$PACKAGE_FILENAME" --pat $VSCE_PAT
+        run: gh release upload "${{ steps.release.outputs.tag_name }}" *.vsix
 
   # This job runs ONLY on pushes to the main branch
   test-on-main:
