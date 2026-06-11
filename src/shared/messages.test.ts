@@ -97,6 +97,18 @@ describe('createVersionStatusMessage', () => {
   });
 });
 
+describe('createVersionStatusMessage', () => {
+  test('carries configuredPath in blocked_missing payload when provided', () => {
+    const msg = createVersionStatusMessage('blocked_missing', '1.16.0', {
+      installUrl: 'https://example.com/install',
+      configuredPath: '/bad/path/goose',
+    });
+    expect(msg.type).toBe(WebviewMessageType.VERSION_STATUS);
+    expect(msg.payload.status).toBe('blocked_missing');
+    expect(msg.payload.configuredPath).toBe('/bad/path/goose');
+  });
+});
+
 describe('isVersionStatusMessage', () => {
   test('returns true for valid VERSION_STATUS message', () => {
     const validMsg = {

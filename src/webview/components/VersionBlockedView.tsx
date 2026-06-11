@@ -49,7 +49,8 @@ export function VersionBlockedView({
             <code className="font-mono text-[var(--vscode-textPreformat-foreground)]">
               goose.binaryPath
             </code>{' '}
-            setting, or clear it to use auto-detection, then reload the window to search again.
+            setting, or clear it to use auto-detection, then run the "Goose: Restart" command to
+            search again.
           </p>
         </div>
       </div>

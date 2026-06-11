@@ -54,6 +54,7 @@ let webviewProvider: WebviewProvider | null = null;
 let sessionStorage: SessionStorage | null = null;
 let sessionManager: SessionManager | null = null;
 let fileSearchService: FileSearchService | null = null;
+let bootstrapInFlight: Promise<void> | null = null;
 
 // Mock streaming state
 let mockStreamingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -753,6 +754,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     outputChannel,
     subprocessManager,
     getSubprocessManager: () => subprocessManager,
+    runBootstrap: bootstrapGoose,
   });
 
   registerContextCommands(context, {
@@ -766,15 +768,58 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   fileSearchService = createFileSearchService(logger.child('FileSearch'));
   setupFileSearchHandler(webviewProvider, fileSearchService, logger.child('FileSearch'));
 
+  registerConfigChangeHandler(context);
+
+  await bootstrapGoose();
+
+  logger.info('Goose extension activated.');
+}
+
+/**
+ * Run the Goose bootstrap sequence: binary discovery -> version gate ->
+ * subprocess creation -> start -> ACP wiring.
+ *
+ * Extracted from `activate()` so it can be re-run without reloading the
+ * window: when discovery or the version gate blocks, no subprocess manager
+ * exists, and `goose.restart` recovers by invoking this function again (via
+ * the `runBootstrap` command dependency). Each run creates a fresh subprocess
+ * manager with its own streaming refs; assigning the module-level
+ * `subprocessManager` keeps `deactivate()` and the `getSubprocessManager`
+ * closure handed to `registerCommands` pointing at the live instance.
+ *
+ * Single-flight: the bootstrap window is long (version exec + spawn + ACP
+ * handshake) and `subprocessManager` stays null until it completes, so a
+ * second invocation (e.g. another `Goose: Restart` or the binaryPath
+ * notification action) would start a duplicate subprocess with
+ * double-registered handlers. Concurrent callers join the in-flight run.
+ */
+function bootstrapGoose(): Promise<void> {
+  if (bootstrapInFlight) {
+    return bootstrapInFlight;
+  }
+  bootstrapInFlight = runBootstrapSequence().finally(() => {
+    bootstrapInFlight = null;
+  });
+  return bootstrapInFlight;
+}
+
+async function runBootstrapSequence(): Promise<void> {
+  if (!logger || !webviewProvider || !sessionManager) {
+    throw new Error('bootstrapGoose invoked before activate() completed its wiring');
+  }
+  const log = logger;
+  const provider = webviewProvider;
+  const manager = sessionManager;
+
   const binaryResult = discoverBinary(getBinaryDiscoveryConfig());
 
   if (E.isLeft(binaryResult)) {
     const error = binaryResult.left;
-    logger.error('Binary discovery failed:', formatError(error));
+    log.error('Binary discovery failed:', formatError(error));
 
     if (isBinaryNotFoundError(error)) {
       // Send version status to webview for in-panel messaging
-      webviewProvider.updateVersionStatus({
+      provider.updateVersionStatus({
         status: 'blocked_missing',
         minimumVersion: MINIMUM_VERSION,
         installUrl: error.installationUrl,
@@ -782,41 +827,46 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       });
     }
 
-    logger.info('Goose extension activated (binary not found - version check blocked).');
+    log.info('Goose bootstrap halted (binary not found - version check blocked).');
     return;
   }
 
   const binaryPath = binaryResult.right;
-  logger.info(`Found goose binary at: ${binaryPath}`);
+  log.info(`Found goose binary at: ${binaryPath}`);
 
   // Version check before spawning subprocess
   const versionResult = await checkVersion(binaryPath)();
 
   if (E.isLeft(versionResult)) {
     const error = versionResult.left;
-    logger.error(
+    log.error(
       `Goose version check failed: detected ${error.detectedVersion}, requires ${error.minimumVersion}`
     );
 
-    webviewProvider.updateVersionStatus({
+    provider.updateVersionStatus({
       status: 'blocked_outdated',
       detectedVersion: error.detectedVersion,
       minimumVersion: error.minimumVersion,
       updateUrl: error.updateUrl,
     });
 
-    logger.info('Goose extension activated (version incompatible - version check blocked).');
+    log.info('Goose bootstrap halted (version incompatible - version check blocked).');
     return;
   }
 
-  logger.info(
+  log.info(
     `Goose version ${versionResult.right.version} detected (meets minimum ${MINIMUM_VERSION})`
   );
 
-  subprocessManager = createSubprocessManager({
-    logger: logger.child('Subprocess'),
+  // Version gate passed: tell the webview so a blocked view from a previous
+  // failed bootstrap (e.g. binary not found at activation) is dismissed.
+  provider.updateVersionStatus({ status: 'compatible', minimumVersion: MINIMUM_VERSION });
+
+  const subprocess = createSubprocessManager({
+    logger: log.child('Subprocess'),
     workingDirectory: getWorkspaceFolder(),
   });
+  subprocessManager = subprocess;
 
   // Shared refs so the `session/update` subscriber and the webview message
   // handler observe the same streaming response id, and so we never
@@ -830,22 +880,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Tracks whether the initial ACP handshake has completed. Post-restart
   // RUNNING transitions use this to decide whether to re-run the handshake
   // against the fresh subprocess (skip on the very first RUNNING because the
-  // activation path below runs `initializeAcpSession` inline).
+  // bootstrap path below runs `initializeAcpSession` inline).
   let acpInitialized = false;
 
-  const acpLogger = logger.child('ACP');
+  const acpLogger = log.child('ACP');
 
-  subprocessManager.onStatusChange(status => {
-    logger?.info(`Subprocess status: ${status}`);
+  subprocess.onStatusChange(status => {
+    log.info(`Subprocess status: ${status}`);
 
     // Never broadcast RUNNING from here: the webview must not enable send
     // until the ACP handshake (initial or restart) has completed, otherwise
     // the first prompt races and fails with Session not found. Both the
-    // initial activation path and the restart path below emit RUNNING
+    // initial bootstrap path and the restart path below emit RUNNING
     // inline once the handshake finishes. Other statuses (STARTING, STOPPED,
     // ERROR) are forwarded immediately so the webview can reflect them.
     if (status !== ProcessStatus.RUNNING) {
-      webviewProvider?.updateStatus(status);
+      provider.updateStatus(status);
     }
 
     // Note: we deliberately do NOT close out the streaming assistant bubble
@@ -867,20 +917,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // and, if this is a RE-start (initial handshake already done), re-run the
     // ACP handshake so the new subprocess has a live session -- otherwise the
     // first prompt after restart fails with `-32002 Session not found`.
-    if (status === ProcessStatus.RUNNING && webviewProvider && subprocessManager) {
+    if (status === ProcessStatus.RUNNING) {
       subscribeSessionUpdates(
-        webviewProvider,
-        subprocessManager,
+        provider,
+        subprocess,
         responseIdRef,
         acpLogger,
         lastSubscribedClient,
         suppressHistoryReplay
       );
 
-      if (acpInitialized && sessionManager) {
-        const provider = webviewProvider;
-        const subprocess = subprocessManager;
-        const manager = sessionManager;
+      if (acpInitialized) {
         void reinitializeAcpOnRestart(
           provider,
           subprocess,
@@ -901,22 +948,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
   });
 
-  const startResult = await subprocessManager.start(binaryPath)();
+  const startResult = await subprocess.start(binaryPath)();
 
   if (E.isLeft(startResult)) {
     const error = startResult.left;
-    logger.error('Failed to start subprocess:', formatError(error));
+    log.error('Failed to start subprocess:', formatError(error));
 
     if (isSubprocessSpawnError(error)) {
       showSubprocessError(error);
     }
 
-    setupMockStreaming(webviewProvider, logger.child('Mock'));
-    logger.info('[Mock] Mock streaming enabled (subprocess failed to start)');
+    setupMockStreaming(provider, log.child('Mock'));
+    log.info('[Mock] Mock streaming enabled (subprocess failed to start)');
   } else {
-    logger.info('Subprocess started successfully');
+    log.info('Subprocess started successfully');
 
-    const clientResult = subprocessManager.getClient();
+    const clientResult = subprocess.getClient();
     if (E.isRight(clientResult)) {
       const client = clientResult.right;
 
@@ -929,60 +976,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // handlers (send / cancel / session CRUD) are deliberately deferred
       // until AFTER the handshake succeeds so the mock fallback path below
       // doesn't run alongside a duplicate ACP send handler.
-      registerHistoryForwarding(webviewProvider, sessionManager, suppressHistoryReplay);
+      registerHistoryForwarding(provider, manager, suppressHistoryReplay);
       subscribeSessionUpdates(
-        webviewProvider,
-        subprocessManager,
+        provider,
+        subprocess,
         responseIdRef,
         acpLogger,
         lastSubscribedClient,
         suppressHistoryReplay
       );
 
-      const session = await initializeAcpSession(
-        client,
-        getWorkspaceFolder(),
-        sessionManager,
-        acpLogger
-      );
+      const session = await initializeAcpSession(client, getWorkspaceFolder(), manager, acpLogger);
 
       if (session) {
-        setupAcpWebviewHandlers(
-          webviewProvider,
-          subprocessManager,
-          sessionManager,
-          acpLogger,
-          responseIdRef
-        );
+        setupAcpWebviewHandlers(provider, subprocess, manager, acpLogger, responseIdRef);
         // Tell the webview which session is now active so its header / session
         // list reflects the restored session instead of showing "New Session"
         // for what is actually a pre-existing conversation on the server.
-        webviewProvider.postMessage(
-          createSessionsListMessage(sessionManager.getSessions(), session.sessionId)
-        );
+        provider.postMessage(createSessionsListMessage(manager.getSessions(), session.sessionId));
         acpInitialized = true;
-        // Initial activation: broadcast RUNNING now that the handshake is
+        // Initial bootstrap: broadcast RUNNING now that the handshake is
         // complete. Subsequent RUNNING transitions go through the restart
         // deferral path above.
-        webviewProvider.updateStatus(ProcessStatus.RUNNING);
-        logger.info('ACP communication enabled');
+        provider.updateStatus(ProcessStatus.RUNNING);
+        log.info('ACP communication enabled');
       } else {
-        setupMockStreaming(webviewProvider, logger.child('Mock'));
+        setupMockStreaming(provider, log.child('Mock'));
         // Mock has its own send handler; broadcast RUNNING so the webview
         // enables input.
-        webviewProvider.updateStatus(ProcessStatus.RUNNING);
-        logger.info('[Mock] Mock streaming enabled (session initialization failed)');
+        provider.updateStatus(ProcessStatus.RUNNING);
+        log.info('[Mock] Mock streaming enabled (session initialization failed)');
       }
     } else {
-      setupMockStreaming(webviewProvider, logger.child('Mock'));
-      webviewProvider.updateStatus(ProcessStatus.RUNNING);
-      logger.info('[Mock] Mock streaming enabled (no client available)');
+      setupMockStreaming(provider, log.child('Mock'));
+      provider.updateStatus(ProcessStatus.RUNNING);
+      log.info('[Mock] Mock streaming enabled (no client available)');
     }
   }
-
-  registerConfigChangeHandler(context);
-
-  logger.info('Goose extension activated.');
 }
 
 function registerConfigChangeHandler(context: vscode.ExtensionContext): void {
@@ -994,6 +1024,16 @@ function registerConfigChangeHandler(context: vscode.ExtensionContext): void {
       }
       if (affectsSetting(e, 'binaryPath')) {
         logger?.info('Binary path setting changed - use "Goose: Restart" to apply');
+        vscode.window
+          .showInformationMessage(
+            'Goose binary path setting changed. Restart Goose to apply it.',
+            'Restart Goose'
+          )
+          .then(selection => {
+            if (selection === 'Restart Goose') {
+              vscode.commands.executeCommand('goose.restart');
+            }
+          });
       }
     })
   );
