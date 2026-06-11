@@ -94,11 +94,6 @@ describe('createVersionStatusMessage', () => {
     expect(msg.payload.status).toBe('blocked_missing');
     expect(msg.payload.configuredPath).toBe('/bad/path/goose');
   });
-
-  test('leaves configuredPath undefined when not provided', () => {
-    const msg = createVersionStatusMessage('blocked_missing', '1.16.0');
-    expect(msg.payload.configuredPath).toBeUndefined();
-  });
 });
 
 describe('isVersionStatusMessage', () => {

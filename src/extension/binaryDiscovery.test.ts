@@ -27,7 +27,6 @@ import {
   expandPath,
   findInPath,
   findInPlatformPaths,
-  getAllSearchPaths,
 } from './binaryDiscovery';
 
 describe('binaryDiscovery', () => {
@@ -576,57 +575,6 @@ describe('binaryDiscovery', () => {
         const result = discoverBinary(config);
         expect(E.isLeft(result)).toBe(true);
       });
-    });
-  });
-
-  describe('getAllSearchPaths', () => {
-    test('includes user configured path when present', () => {
-      const config: BinaryDiscoveryConfig = {
-        userConfiguredPath: '/custom/goose',
-        platform: 'darwin',
-        env: {},
-        homeDir: '/home/testuser',
-      };
-
-      const paths = getAllSearchPaths(config);
-      expect(paths).toContain('/custom/goose');
-    });
-
-    test('includes PATH environment variable placeholder', () => {
-      const config: BinaryDiscoveryConfig = {
-        userConfiguredPath: undefined,
-        platform: 'darwin',
-        env: {},
-        homeDir: '/home/testuser',
-      };
-
-      const paths = getAllSearchPaths(config);
-      expect(paths).toContain('PATH environment variable');
-    });
-
-    test('includes platform-specific paths', () => {
-      const config: BinaryDiscoveryConfig = {
-        userConfiguredPath: undefined,
-        platform: 'darwin',
-        env: {},
-        homeDir: '/home/testuser',
-      };
-
-      const paths = getAllSearchPaths(config);
-      expect(paths).toContain('/home/testuser/.local/bin/goose');
-      expect(paths).toContain('/usr/local/bin/goose');
-    });
-
-    test('expands tilde in returned paths', () => {
-      const config: BinaryDiscoveryConfig = {
-        userConfiguredPath: '~/.local/bin/goose',
-        platform: 'darwin',
-        env: {},
-        homeDir: '/home/testuser',
-      };
-
-      const paths = getAllSearchPaths(config);
-      expect(paths[0]).toBe('/home/testuser/.local/bin/goose');
     });
   });
 });

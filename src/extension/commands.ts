@@ -50,7 +50,9 @@ export function registerCommands(
 
       const binaryResult = discoverBinary(getBinaryDiscoveryConfig());
       if (E.isLeft(binaryResult)) {
-        vscode.window.showErrorMessage(`Cannot restart: ${formatError(binaryResult.left)}`);
+        vscode.window.showErrorMessage(
+          `Cannot restart: ${formatError(binaryResult.left).replace(/\n\s*/g, ' ')}`
+        );
         return;
       }
 

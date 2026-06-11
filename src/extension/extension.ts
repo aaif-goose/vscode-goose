@@ -772,7 +772,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       webviewProvider.updateVersionStatus({
         status: 'blocked_missing',
         minimumVersion: MINIMUM_VERSION,
-        installUrl: 'https://goose-docs.ai/docs/quickstart/',
+        installUrl: error.installationUrl,
         configuredPath: error.configuredPath,
       });
     }

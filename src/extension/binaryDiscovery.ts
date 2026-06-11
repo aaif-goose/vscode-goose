@@ -152,21 +152,3 @@ export function discoverBinary(
     return toLeft(createBinaryNotFoundError(searchedPaths, config.platform));
   });
 }
-
-/** Get all search paths that would be checked (for error messages) */
-export function getAllSearchPaths(config: BinaryDiscoveryConfig): readonly string[] {
-  const paths: string[] = [];
-
-  if (config.userConfiguredPath !== undefined) {
-    paths.push(expandPath(config.userConfiguredPath, config.homeDir, config.env));
-  }
-
-  paths.push('PATH environment variable');
-
-  const platformPaths = SEARCH_PATHS[config.platform] ?? [];
-  for (const pathStr of platformPaths) {
-    paths.push(expandPath(pathStr, config.homeDir, config.env));
-  }
-
-  return paths;
-}

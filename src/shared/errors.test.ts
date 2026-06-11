@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   createBinaryNotFoundError,
+  createConfiguredPathInvalidError,
   createJsonRpcError,
   createJsonRpcParseError,
   createJsonRpcTimeoutError,
@@ -34,6 +35,15 @@ describe('formatError', () => {
 
       expect(formatted).toContain('- /path/a');
       expect(formatted).toContain('- /path/b');
+    });
+
+    test('names the configured path and setting for invalid configured paths', () => {
+      const error = createConfiguredPathInvalidError('/bad/path/goose', 'darwin');
+      const formatted = formatError(error);
+
+      expect(formatted).toContain('/bad/path/goose');
+      expect(formatted).toContain('goose.binaryPath');
+      expect(formatted).toContain('auto-detection');
     });
   });
 
