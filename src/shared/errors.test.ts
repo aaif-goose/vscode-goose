@@ -9,6 +9,7 @@ import {
   createSubprocessSpawnError,
   createVersionMismatchError,
   formatError,
+  formatErrorDetail,
 } from './errors';
 
 describe('formatError', () => {
@@ -166,5 +167,46 @@ describe('formatError', () => {
       expect(formatted).toContain('https://');
       expect(formatted).toContain('updating-goose');
     });
+  });
+});
+
+describe('formatErrorDetail', () => {
+  test('appends string data to the message', () => {
+    const error = createJsonRpcError(-32603, 'Internal error', 'Missing provider');
+
+    expect(formatErrorDetail(error)).toBe('Internal error — Missing provider');
+  });
+
+  test('appends object data as compact JSON', () => {
+    const error = createJsonRpcError(-32603, 'Internal error', { reason: 'no provider' });
+
+    expect(formatErrorDetail(error)).toBe('Internal error — {"reason":"no provider"}');
+  });
+
+  test('returns message unchanged when data is undefined', () => {
+    const error = createJsonRpcError(-32603, 'Internal error');
+
+    expect(formatErrorDetail(error)).toBe('Internal error');
+  });
+
+  test('returns message unchanged when data is null or blank', () => {
+    expect(formatErrorDetail(createJsonRpcError(-32603, 'Internal error', null))).toBe(
+      'Internal error'
+    );
+    expect(formatErrorDetail(createJsonRpcError(-32603, 'Internal error', '   '))).toBe(
+      'Internal error'
+    );
+  });
+
+  test('returns message unchanged for non-JsonRpc errors', () => {
+    const error = createJsonRpcTimeoutError('session/prompt', 30000, 42);
+
+    expect(formatErrorDetail(error)).toBe(error.message);
+  });
+
+  test('truncates long data to 200 characters with ellipsis', () => {
+    const error = createJsonRpcError(-32603, 'Internal error', 'x'.repeat(300));
+
+    expect(formatErrorDetail(error)).toBe(`Internal error — ${'x'.repeat(200)}…`);
   });
 });

@@ -302,3 +302,34 @@ export function formatError(error: GooseError): string {
       );
   }
 }
+
+const MAX_ERROR_DETAIL_LENGTH = 200;
+
+function stringifyErrorData(data: unknown): string {
+  if (typeof data === 'string') return data;
+  try {
+    return JSON.stringify(data) ?? '';
+  } catch {
+    return String(data);
+  }
+}
+
+/**
+ * Format an error's user-facing message, enriched with the JSON-RPC `error.data`
+ * detail when present (e.g. "Internal error — Missing provider").
+ * Non-JsonRpc errors and absent/blank data return the message unchanged.
+ */
+export function formatErrorDetail(error: GooseError): string {
+  if (!isJsonRpcError(error) || error.data === undefined || error.data === null) {
+    return error.message;
+  }
+  const detail = stringifyErrorData(error.data).trim();
+  if (detail === '') {
+    return error.message;
+  }
+  const truncated =
+    detail.length > MAX_ERROR_DETAIL_LENGTH
+      ? `${detail.slice(0, MAX_ERROR_DETAIL_LENGTH)}…`
+      : detail;
+  return `${error.message} — ${truncated}`;
+}
