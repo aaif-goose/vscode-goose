@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import { ContextChip } from '../shared/contextTypes';
 import { formatError } from '../shared/errors';
 import { createAddContextChipMessage, createFocusChatInputMessage } from '../shared/messages';
+import { ProcessStatus } from '../shared/types';
 import { discoverBinary } from './binaryDiscovery';
 import { getBinaryDiscoveryConfig } from './config';
 import { Logger } from './logger';
@@ -20,6 +21,12 @@ export interface CommandDependencies {
   readonly outputChannel: vscode.OutputChannel;
   readonly subprocessManager: SubprocessManager | null;
   readonly getSubprocessManager: () => SubprocessManager | null;
+  /**
+   * Re-runs the full bootstrap (discovery -> version gate -> subprocess
+   * start). Used by `goose.restart` to recover when activation blocked
+   * before a subprocess manager was created.
+   */
+  readonly runBootstrap: () => Promise<void>;
 }
 
 /** Register all Goose commands */
@@ -27,7 +34,7 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   deps: CommandDependencies
 ): void {
-  const { logger, outputChannel, getSubprocessManager } = deps;
+  const { logger, outputChannel, getSubprocessManager, runBootstrap } = deps;
 
   context.subscriptions.push(
     vscode.commands.registerCommand('goose.showLogs', () => {
@@ -40,7 +47,23 @@ export function registerCommands(
     vscode.commands.registerCommand('goose.restart', async () => {
       const manager = getSubprocessManager();
       if (!manager) {
-        vscode.window.showWarningMessage('Goose subprocess manager not initialized.');
+        // Activation blocked before a subprocess manager existed (e.g. binary
+        // not found or version gate failed). Re-run the bootstrap so the user
+        // can recover without reloading the window.
+        logger.info('Restart command invoked without a subprocess manager - re-running bootstrap');
+        await runBootstrap();
+
+        const recovered = getSubprocessManager();
+        if (recovered && recovered.getStatus() === ProcessStatus.RUNNING) {
+          vscode.window.showInformationMessage('Goose restarted successfully.');
+        } else if (!recovered) {
+          // Bootstrap blocked again; the chat panel names the specific reason.
+          vscode.window.showWarningMessage(
+            'Goose could not start. Check the Goose panel for details.'
+          );
+        }
+        // Manager exists but is not RUNNING: the bootstrap's spawn-failure
+        // path already showed its own error toast.
         return;
       }
 

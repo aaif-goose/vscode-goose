@@ -91,28 +91,30 @@ export function createWebviewProvider(config: WebviewProviderConfig): WebviewPro
     postMessage(createStatusUpdateMessage(status));
   };
 
-  const updateVersionStatus = (payload: VersionStatusPayload): void => {
-    lastVersionStatus = payload;
+  const postVersionStatus = (payload: VersionStatusPayload): void => {
     postMessage(
       createVersionStatusMessage(payload.status, payload.minimumVersion, {
         detectedVersion: payload.detectedVersion,
         installUrl: payload.installUrl,
         updateUrl: payload.updateUrl,
+        configuredPath: payload.configuredPath,
       })
     );
+  };
+
+  const updateVersionStatus = (payload: VersionStatusPayload): void => {
+    // A compatible result clears any cached blocked state so reconnecting
+    // webviews fall through to the live process status instead of being
+    // re-blocked by a stale versionStatus.
+    lastVersionStatus = payload.status === 'compatible' ? null : payload;
+    postVersionStatus(payload);
   };
 
   const resendState = (): void => {
     // Re-send last known status when webview reconnects
     if (lastVersionStatus) {
       logger.debug('Re-sending version status to reconnected webview');
-      postMessage(
-        createVersionStatusMessage(lastVersionStatus.status, lastVersionStatus.minimumVersion, {
-          detectedVersion: lastVersionStatus.detectedVersion,
-          installUrl: lastVersionStatus.installUrl,
-          updateUrl: lastVersionStatus.updateUrl,
-        })
-      );
+      postVersionStatus(lastVersionStatus);
     } else if (lastStatus) {
       logger.debug('Re-sending process status to reconnected webview');
       postMessage(createStatusUpdateMessage(lastStatus));
