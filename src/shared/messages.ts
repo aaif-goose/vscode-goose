@@ -92,6 +92,23 @@ export interface ErrorPayload {
   };
 }
 
+export const FALLBACK_ERROR_BLOCK_CONTENT =
+  'Something went wrong. Check the Goose output log for details.';
+
+/**
+ * Build the chat error-block text for an ERROR payload.
+ * Never returns an empty string: falls back to title, message, or a static
+ * fallback so the error block always renders visible text.
+ */
+export function buildErrorBlockContent(payload: ErrorPayload): string {
+  const title = payload.title.trim();
+  const message = payload.message.trim();
+  if (title && message) return `${title}: ${message}`;
+  if (title) return title;
+  if (message) return message;
+  return FALLBACK_ERROR_BLOCK_CONTENT;
+}
+
 /** Payload for SEND_MESSAGE message */
 export interface SendMessagePayload {
   readonly content: string;

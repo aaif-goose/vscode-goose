@@ -8,6 +8,7 @@ import * as fs from 'fs/promises';
 import * as vscode from 'vscode';
 import {
   formatError,
+  formatErrorDetail,
   isBinaryNotFoundError,
   isSubprocessSpawnError,
   SubprocessSpawnError,
@@ -440,13 +441,14 @@ function setupAcpWebviewHandlers(
           // The webview's ADD_ERROR_MESSAGE reducer cleans up the optimistic
           // assistant placeholder, so we don't need to also post
           // GENERATION_COMPLETE here (which would leave a blank bubble).
+          const body = 'Goose subprocess is not running. Try "Goose: Restart".';
           provider.postMessage(
-            createErrorMessage(
-              'Message Send Failed',
-              'Goose subprocess is not running. Try "Goose: Restart".',
-              { label: 'View Logs', command: 'goose.showLogs' }
-            )
+            createErrorMessage('Message Send Failed', body, {
+              label: 'View Logs',
+              command: 'goose.showLogs',
+            })
           );
+          showErrorToast(body);
           responseIdRef.current = null;
           return;
         }
@@ -470,13 +472,14 @@ function setupAcpWebviewHandlers(
           // placeholder (or marks a partially-streamed one complete) and
           // resets isGenerating. No GENERATION_COMPLETE needed -- sending
           // both would leave a blank bubble above the error row.
+          const body = `Failed to send message: ${formatErrorDetail(result.left)}`;
           provider.postMessage(
-            createErrorMessage(
-              'Message Send Failed',
-              `Failed to send message: ${result.left.message}`,
-              { label: 'View Logs', command: 'goose.showLogs' }
-            )
+            createErrorMessage('Message Send Failed', body, {
+              label: 'View Logs',
+              command: 'goose.showLogs',
+            })
           );
+          showErrorToast(body);
           responseIdRef.current = null;
         } else {
           log.info(`Generation completed with stopReason: ${result.right.stopReason}`);
@@ -526,7 +529,7 @@ function setupAcpWebviewHandlers(
           } else {
             log.error('Failed to create session:', result.left);
             provider.postMessage(
-              createErrorMessage('Session Creation Failed', result.left.message)
+              createErrorMessage('Session Creation Failed', formatErrorDetail(result.left))
             );
           }
         });
@@ -557,7 +560,9 @@ function setupAcpWebviewHandlers(
             log.info(`Session loaded: ${sessionId}`);
           } else {
             log.error('Failed to load session:', result.left);
-            provider.postMessage(createErrorMessage('Session Load Failed', result.left.message));
+            provider.postMessage(
+              createErrorMessage('Session Load Failed', formatErrorDetail(result.left))
+            );
           }
         });
     }
@@ -711,17 +716,17 @@ function setupFileSearchHandler(
   log.debug('File search handler registered');
 }
 
+/** Show an error notification with a "View Logs" action that opens the Goose output channel. */
+function showErrorToast(message: string): void {
+  vscode.window.showErrorMessage(message, 'View Logs').then(selection => {
+    if (selection === 'View Logs') {
+      vscode.commands.executeCommand('goose.showLogs');
+    }
+  });
+}
+
 function showSubprocessError(error: SubprocessSpawnError): void {
-  vscode.window
-    .showErrorMessage(
-      `Failed to start Goose: ${error.code}. Check the Goose output for details.`,
-      'View Logs'
-    )
-    .then(selection => {
-      if (selection === 'View Logs') {
-        vscode.commands.executeCommand('goose.showLogs');
-      }
-    });
+  showErrorToast(`Failed to start Goose: ${error.code}. Check the Goose output for details.`);
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {

@@ -1,3 +1,5 @@
+import { FALLBACK_ERROR_BLOCK_CONTENT } from '../../../shared/messages';
+
 interface ErrorMessageProps {
   content: string;
   timestamp?: Date;
@@ -12,14 +14,17 @@ function formatTime(date?: Date): string {
 
 export function ErrorMessage({ content, timestamp, onRetry, originalContent }: ErrorMessageProps) {
   const canRetry = onRetry && originalContent;
+  const displayContent = content.trim() ? content : FALLBACK_ERROR_BLOCK_CONTENT;
 
   return (
     <div className="flex flex-col items-start">
       <div className="w-full p-3 bg-[var(--vscode-inputValidation-errorBackground,rgba(255,0,0,0.1))] border border-[var(--vscode-inputValidation-errorBorder,var(--vscode-errorForeground))] rounded-lg">
         <div className="flex items-start gap-2">
-          <ErrorIcon className="w-4 h-4 text-[var(--vscode-errorForeground)] shrink-0 mt-0.5" />
+          <ErrorIcon className="w-4 h-4 text-[var(--vscode-inputValidation-errorForeground,var(--vscode-foreground))] shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-[var(--vscode-errorForeground)] text-sm">{content}</p>
+            <p className="text-[var(--vscode-inputValidation-errorForeground,var(--vscode-foreground))] text-sm">
+              {displayContent}
+            </p>
             {canRetry && (
               <button
                 onClick={() => onRetry(originalContent)}
