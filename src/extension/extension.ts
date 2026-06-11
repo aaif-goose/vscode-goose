@@ -53,6 +53,7 @@ let webviewProvider: WebviewProvider | null = null;
 let sessionStorage: SessionStorage | null = null;
 let sessionManager: SessionManager | null = null;
 let fileSearchService: FileSearchService | null = null;
+let bootstrapInFlight: Promise<void> | null = null;
 
 // Mock streaming state
 let mockStreamingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -780,8 +781,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  * manager with its own streaming refs; assigning the module-level
  * `subprocessManager` keeps `deactivate()` and the `getSubprocessManager`
  * closure handed to `registerCommands` pointing at the live instance.
+ *
+ * Single-flight: the bootstrap window is long (version exec + spawn + ACP
+ * handshake) and `subprocessManager` stays null until it completes, so a
+ * second invocation (e.g. another `Goose: Restart` or the binaryPath
+ * notification action) would start a duplicate subprocess with
+ * double-registered handlers. Concurrent callers join the in-flight run.
  */
-async function bootstrapGoose(): Promise<void> {
+function bootstrapGoose(): Promise<void> {
+  if (bootstrapInFlight) {
+    return bootstrapInFlight;
+  }
+  bootstrapInFlight = runBootstrapSequence().finally(() => {
+    bootstrapInFlight = null;
+  });
+  return bootstrapInFlight;
+}
+
+async function runBootstrapSequence(): Promise<void> {
   if (!logger || !webviewProvider || !sessionManager) {
     throw new Error('bootstrapGoose invoked before activate() completed its wiring');
   }
