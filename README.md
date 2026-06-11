@@ -1,6 +1,6 @@
 # Goose for VS Code
 
-Bring [Goose](https://block.github.io/goose/)—the open-source, on-device AI agent—directly into your editor. Chat with Goose, reference your code, and let it handle full-stack engineering tasks without ever leaving VS Code.
+Bring [Goose](https://goose-docs.ai/)—the open-source, on-device AI agent—directly into your editor. Chat with Goose, reference your code, and let it handle full-stack engineering tasks without ever leaving VS Code.
 
 ![Screenshot](./resources/screenshot.gif)
 
@@ -27,7 +27,7 @@ See Goose think in real-time. Responses stream token-by-token with syntax-highli
 ## Requirements
 
 - **VS Code 1.95.0+**
-- **Goose CLI 1.16.0+** — [Install Goose](https://block.github.io/goose/) and ensure `goose --version` works from your command line.
+- **Goose CLI 1.16.0+** — [Install Goose](https://goose-docs.ai/docs/quickstart/) and ensure `goose --version` works from your command line.
 
 ## Installation
 

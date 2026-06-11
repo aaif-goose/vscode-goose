@@ -25,7 +25,7 @@ describe('formatError', () => {
       const formatted = formatError(error);
 
       expect(formatted).toContain('https://');
-      expect(formatted).toContain('block.github.io/goose');
+      expect(formatted).toContain('goose-docs.ai');
     });
 
     test('formats paths as bullet list', () => {
