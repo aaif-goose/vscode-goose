@@ -125,8 +125,12 @@ export function formatSessionTime(createdAt: string): string {
 export function truncatePath(path: string, maxLength: number = 30): string {
   if (path.length <= maxLength) return path;
 
-  const parts = path.split('/').filter(Boolean);
-  if (parts.length <= 2) return '.../' + parts.join('/');
+  const lastForwardSlash = path.lastIndexOf('/');
+  const lastBackslash = path.lastIndexOf('\\');
+  const separator = lastBackslash > lastForwardSlash ? '\\' : '/';
+  const parts = path.split(/[/\\]/).filter(Boolean);
 
-  return '.../' + parts.slice(-2).join('/');
+  if (parts.length <= 2) return '...' + separator + parts.join(separator);
+
+  return '...' + separator + parts.slice(-2).join(separator);
 }
