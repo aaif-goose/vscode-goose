@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/aaif-goose/vscode-goose/compare/v0.2.3...v0.2.4) (2026-06-30)
+
+
+### Bug Fixes
+
+* **shared:** truncate Windows paths correctly ([#77](https://github.com/aaif-goose/vscode-goose/issues/77)) ([4b6323e](https://github.com/aaif-goose/vscode-goose/commit/4b6323ef9a6bddf51e438c985de614edb46a0e9c))
+
 ## [0.2.3](https://github.com/aaif-goose/vscode-goose/compare/v0.2.2...v0.2.3) (2026-06-11)
 
 
