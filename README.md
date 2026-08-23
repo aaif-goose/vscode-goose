@@ -92,6 +92,19 @@ Goose reads its provider and model configuration from:
 
 Questions or issues? Open an issue on [GitHub](https://github.com/block/vscode-goose/issues).
 
+## Spectator phone (Build Remote Agent)
+
+This extension stays a thin ACP bridge to the local Goose CLI. To spectate the **desktop** Goose session from a phone, pair [Build Remote Agent](https://grokbuildremote.com/) via the free MIT [`gbr-agent`](https://github.com/LinespottingOrg/GrokBuildRemote-Agents). Protocol `gbr/1`. Phone is spectator + veto, not orchestrator. Independent product — not affiliated with xAI or SpaceX. No extra VS Code UI.
+
+```bash
+curl -fsSL https://grokbuildremote.com/install.sh | bash
+gbr-agent version          # need v0.6.0+
+gbr-agent pair && gbr-agent run
+curl -sS http://127.0.0.1:8788/health
+```
+
+Attach only `http://127.0.0.1:8788` or stdio `gbr-mcp`. Unpair in the phone app before switching PCs. Never commit mailbox keys.
+
 ## License
 
 Apache-2.0 — see [LICENSE](./LICENSE)
